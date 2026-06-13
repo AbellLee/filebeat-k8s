@@ -1,0 +1,11 @@
+apiVersion: 1
+
+apps:
+  - type: 'filebeat-k8s-app'
+    org_id: 1
+    org_name: 'filebeat-k8s'
+    disabled: false
+    jsonData:
+      controlServerUrl: http://control-server:8080
+    secureJsonData:
+      adminToken: ''

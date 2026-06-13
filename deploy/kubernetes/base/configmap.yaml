@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-ops-config
+data:
+  cluster-id: dev
+  filebeat.yml: |
+    filebeat.config.inputs:
+      enabled: true
+      path: inputs.d/*.yml
+      reload.enabled: true
+      reload.period: 10s
+    output.console:
+      pretty: true

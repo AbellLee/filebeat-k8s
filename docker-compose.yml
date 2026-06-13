@@ -1,0 +1,73 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: filebeat-root
+      MYSQL_USER: filebeat
+      MYSQL_PASSWORD: filebeat
+      MYSQL_DATABASE: filebeat_ops
+    ports:
+      - "53306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ufilebeat -pfilebeat --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  control-server:
+    build:
+      context: .
+      dockerfile: deploy/docker/server.Dockerfile
+    image: filebeat-ops-server:local
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://filebeat:filebeat@mysql:3306/filebeat_ops?parseTime=true
+      AGENT_TOKEN: dev-agent-token
+      PORT: "8080"
+      OPERATOR_ENABLED: "false"
+    ports:
+      - "18080:8080"
+
+  control-sidecar:
+    build:
+      context: .
+      dockerfile: deploy/docker/sidecar.Dockerfile
+    image: filebeat-ops-sidecar:local
+    depends_on:
+      - control-server
+    environment:
+      CONTROL_SERVER_URL: http://control-server:8080
+      AGENT_TOKEN: dev-agent-token
+      CLUSTER_ID: dev
+      NODE_NAME: compose-node
+      POD_NAME: compose-sidecar
+      POD_NAMESPACE: filebeat-ops
+      INPUTS_DIR: /usr/share/filebeat/inputs.d
+      NODE_LABELS: nodepool=online,zone=compose
+      CONFIG_MODE: poll
+      POLL_INTERVAL: 10s
+      KLOG_DIR: /var/log/klog
+      KLOG_STDIO_DIR: /var/log/klog-stdio
+    volumes:
+      - dynamic-inputs:/usr/share/filebeat/inputs.d
+
+  grafana:
+    image: grafana/grafana-enterprise:13.0.2
+    depends_on:
+      - control-server
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_LOG_FILTERS: plugin.filebeat-k8s-app:debug
+      GF_LOG_LEVEL: debug
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: filebeat-k8s-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-plugin/dist:/var/lib/grafana/plugins/filebeat-k8s-app
+      - ./grafana-plugin/provisioning:/etc/grafana/provisioning
+
+volumes:
+  dynamic-inputs: {}

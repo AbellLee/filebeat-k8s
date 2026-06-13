@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+grafana-plugin/node_modules/
+
+# Build outputs
+dist/
+grafana-plugin/dist/
+coverage/
+grafana-plugin/coverage/
+
+# Runtime and test artifacts
+artifacts/
+grafana-plugin/artifacts/
+test-results/
+playwright-report/
+blob-report/
+.cache/
+grafana-plugin/.cache/
+
+# Logs and local process files
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Tool caches
+.eslintcache
+grafana-plugin/.eslintcache

@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fbops-codex-smoke
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fbops-smoke
+  namespace: fbops-codex-smoke
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fbops-codex-smoke
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fbops-codex-smoke
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fbops-codex-smoke
+subjects:
+  - kind: ServiceAccount
+    name: fbops-smoke
+    namespace: fbops-codex-smoke
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: fbops-codex-smoke
+spec:
+  selector:
+    app: fbops-smoke-mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: fbops-codex-smoke
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fbops-smoke-mysql
+  template:
+    metadata:
+      labels:
+        app: fbops-smoke-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: filebeat-root
+            - name: MYSQL_USER
+              value: filebeat
+            - name: MYSQL_PASSWORD
+              value: filebeat
+            - name: MYSQL_DATABASE
+              value: filebeat_ops
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -ufilebeat -pfilebeat --silent"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebeat-control-server
+  namespace: fbops-codex-smoke
+spec:
+  selector:
+    app: fbops-smoke-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filebeat-control-server
+  namespace: fbops-codex-smoke
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fbops-smoke-server
+  template:
+    metadata:
+      labels:
+        app: fbops-smoke-server
+    spec:
+      serviceAccountName: fbops-smoke
+      containers:
+        - name: control-server
+          image: localhost:5000/filebeat-ops-server:codex-smoke
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              value: mysql://filebeat:filebeat@mysql:3306/filebeat_ops?parseTime=true
+            - name: AGENT_TOKEN
+              value: dev-agent-token
+            - name: PORT
+              value: "8080"
+            - name: OPERATOR_ENABLED
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20

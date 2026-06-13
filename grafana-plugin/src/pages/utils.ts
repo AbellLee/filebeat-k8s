@@ -1,0 +1,138 @@
+import { parse, stringify } from 'yaml';
+import { Agent, Policy } from '../types';
+
+export const emptyPolicy = (): Policy => ({
+  id: '',
+  name: '',
+  cluster_id: 'dev',
+  namespace: '',
+  controller_type: 'deployment',
+  controller_name: '',
+  container_name: '',
+  node_selector: '',
+  log_type: 'container_stdio',
+  log_path: '',
+  enabled: true,
+  priority: 100,
+  current_revision: 0,
+  custom_fields: {},
+  input_config: {},
+});
+
+export function formatDate(value?: string): string {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+export function timeAgo(value?: string): string {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const seconds = Math.max(1, Math.round((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  return `${Math.round(minutes / 60)}h ago`;
+}
+
+export function policyScope(policy: Policy): string {
+  if (policy.log_type === 'host_file') {
+    return policy.log_path || '-';
+  }
+  return [policy.namespace, policy.controller_type, policy.controller_name, policy.container_name]
+    .filter(Boolean)
+    .join(' / ');
+}
+
+export function shortChecksum(value?: string): string {
+  if (!value) {
+    return '-';
+  }
+  if (!value.startsWith('sha256:') || value.length < 24) {
+    return value;
+  }
+  return `${value.slice(0, 13)}...${value.slice(-6)}`;
+}
+
+export function customFieldsToText(fields?: Record<string, string>): string {
+  return Object.entries(fields ?? {})
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+}
+
+export function customFieldsFromText(value: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const line of value.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+    const index = trimmed.indexOf('=');
+    if (index <= 0) {
+      continue;
+    }
+    fields[trimmed.slice(0, index).trim()] = trimmed.slice(index + 1).trim();
+  }
+  return fields;
+}
+
+const reservedInputConfigKeys = new Set([
+  'type',
+  'id',
+  'enabled',
+  'paths',
+  'parsers',
+  'processors',
+  'prospector.scanner.symlinks',
+]);
+
+export function inputConfigToYaml(config?: Record<string, unknown>): string {
+  if (!config || Object.keys(config).length === 0) {
+    return '';
+  }
+  return stringify(config, { lineWidth: 0 }).trimEnd();
+}
+
+export function inputConfigFromYaml(value: string): Record<string, unknown> {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return {};
+  }
+  const parsed = parse(trimmed) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('input_config 必须是 YAML object/map');
+  }
+  const config = parsed as Record<string, unknown>;
+  for (const key of Object.keys(config)) {
+    const normalized = key.trim();
+    if (!normalized) {
+      throw new Error('input_config 不能包含空 key');
+    }
+    if (reservedInputConfigKeys.has(normalized)) {
+      throw new Error(`input_config 不能覆盖保留字段 ${normalized}`);
+    }
+  }
+  return config;
+}
+
+export function agentHealthy(agent: Agent): boolean {
+  if (!agent.last_heartbeat_at) {
+    return false;
+  }
+  const lastHeartbeat = new Date(agent.last_heartbeat_at).getTime();
+  return !Number.isNaN(lastHeartbeat) && Date.now() - lastHeartbeat < 5 * 60 * 1000;
+}

@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fbops-sidecar-smoke
+  namespace: fbops-codex-smoke
+  labels:
+    app: fbops-sidecar-smoke
+spec:
+  restartPolicy: Never
+  serviceAccountName: fbops-smoke
+  containers:
+    - name: control-sidecar
+      image: localhost:5000/filebeat-ops-sidecar:codex-smoke
+      imagePullPolicy: Never
+      command: ["sh", "-ec", "/usr/local/bin/control-sidecar; sleep 3600"]
+      env:
+        - name: CONTROL_SERVER_URL
+          value: http://filebeat-control-server:8080
+        - name: AGENT_TOKEN
+          value: dev-agent-token
+        - name: CLUSTER_ID
+          value: dev
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_LABELS
+          value: smoke=true
+        - name: INPUTS_DIR
+          value: /inputs
+        - name: CONFIG_MODE
+          value: poll
+        - name: POLL_INTERVAL
+          value: 1s
+        - name: RUN_ONCE
+          value: "true"
+        - name: KLOG_DIR
+          value: /tmp/klog
+        - name: KLOG_STDIO_DIR
+          value: /tmp/klog-stdio
+        - name: HOSTFS_DIR
+          value: /
+        - name: HOSTPROC_DIR
+          value: /proc
+      volumeMounts:
+        - name: inputs
+          mountPath: /inputs
+  volumes:
+    - name: inputs
+      emptyDir: {}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "app",
+  "name": "日志采集",
+  "id": "filebeat-k8s-app",
+  "backend": true,
+  "executable": "gpx_filebeat_k8s",
+  "info": {
+    "keywords": ["filebeat", "kubernetes", "logging", "app"],
+    "description": "Manage filebeat-k8s policies, revisions, and agents from Grafana.",
+    "author": {
+      "name": "Filebeat k8s"
+    },
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "includes": [
+    {
+      "type": "page",
+      "name": "Overview",
+      "path": "/a/%PLUGIN_ID%/overview",
+      "addToNav": true,
+      "defaultNav": true
+    },
+    {
+      "type": "page",
+      "name": "Policies",
+      "path": "/a/%PLUGIN_ID%/policies",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
+      "name": "Agents",
+      "path": "/a/%PLUGIN_ID%/agents",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
+      "name": "Settings",
+      "path": "/plugins/%PLUGIN_ID%",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
+      "icon": "cog",
+      "name": "Configuration",
+      "path": "/plugins/%PLUGIN_ID%",
+      "role": "Admin",
+      "addToNav": false
+    }
+  ],
+  "dependencies": {
+    "grafanaDependency": ">=12.3.0",
+    "plugins": []
+  }
+}
