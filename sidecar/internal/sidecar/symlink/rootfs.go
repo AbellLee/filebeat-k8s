@@ -8,10 +8,11 @@ import (
 )
 
 type RootfsResolver struct {
-	HostFSDir          string
-	HostProcDir        string
-	ContainerdStateDir string
-	MaxProcScan        int
+	HostFSDir                    string
+	HostProcDir                  string
+	ContainerdStateDir           string
+	ContainerdStateDirCandidates []string
+	MaxProcScan                  int
 }
 
 func (r RootfsResolver) Resolve(containerID string) (string, string, error) {
@@ -92,11 +93,14 @@ func (r RootfsResolver) containerdPrefixes() []string {
 	if r.ContainerdStateDir != "" {
 		return []string{r.hostPath(r.ContainerdStateDir)}
 	}
-	candidates := []string{
-		"/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io",
-		"/run/containerd/io.containerd.runtime.v2.task/k8s.io",
-		"/var/run/containerd/io.containerd.runtime.v2.task/k8s.io",
-		"/data/container/state/io.containerd.runtime.v2.task/k8s.io",
+	candidates := r.ContainerdStateDirCandidates
+	if len(candidates) == 0 {
+		candidates = []string{
+			"/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io",
+			"/run/containerd/io.containerd.runtime.v2.task/k8s.io",
+			"/var/run/containerd/io.containerd.runtime.v2.task/k8s.io",
+			"/data/container/state/io.containerd.runtime.v2.task/k8s.io",
+		}
 	}
 	out := make([]string, 0, len(candidates))
 	for _, c := range candidates {

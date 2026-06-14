@@ -120,7 +120,7 @@ spec:
       containers:
         - name: control-server
           image: localhost:5000/filebeat-ops-server:codex-smoke
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

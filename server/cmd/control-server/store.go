@@ -203,14 +203,18 @@ func (d database) upsertAgentRegistration(ctx context.Context, req control.Agent
 	if err != nil {
 		return control.Agent{}, err
 	}
+	capabilities, err := json.Marshal(control.NormalizeAgentCapabilities(req.Capabilities))
+	if err != nil {
+		return control.Agent{}, err
+	}
 	_, err = d.db.ExecContext(ctx, `INSERT INTO agents
-		(id,cluster_id,node_name,pod_name,namespace,agent_version,filebeat_version,current_config_checksum,node_labels,last_heartbeat_at)
-		VALUES (?,?,?,?,?,?,?,?,?,NOW())
+		(id,cluster_id,node_name,pod_name,namespace,agent_version,filebeat_version,current_config_checksum,node_labels,capabilities,last_heartbeat_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,NOW())
 		ON DUPLICATE KEY UPDATE
 		cluster_id=VALUES(cluster_id), node_name=VALUES(node_name), pod_name=VALUES(pod_name), namespace=VALUES(namespace),
 		agent_version=VALUES(agent_version), filebeat_version=VALUES(filebeat_version),
-		current_config_checksum=VALUES(current_config_checksum), node_labels=VALUES(node_labels), last_heartbeat_at=NOW()`,
-		req.ID, req.ClusterID, req.NodeName, req.PodName, req.Namespace, req.AgentVersion, req.FilebeatVersion, req.CurrentConfigChecksum, string(labels))
+		current_config_checksum=VALUES(current_config_checksum), node_labels=VALUES(node_labels), capabilities=VALUES(capabilities), last_heartbeat_at=NOW()`,
+		req.ID, req.ClusterID, req.NodeName, req.PodName, req.Namespace, req.AgentVersion, req.FilebeatVersion, req.CurrentConfigChecksum, string(labels), string(capabilities))
 	if err != nil {
 		return control.Agent{}, err
 	}
@@ -221,10 +225,14 @@ func (d database) heartbeat(ctx context.Context, req control.AgentHeartbeatReque
 	if req.ID == "" {
 		req.ID = control.AgentID(req.ClusterID, req.NodeName)
 	}
-	_, err := d.db.ExecContext(ctx, `INSERT INTO agents (id,cluster_id,node_name,current_config_checksum,last_heartbeat_at)
-		VALUES (?,?,?,?,NOW())
-		ON DUPLICATE KEY UPDATE current_config_checksum=VALUES(current_config_checksum), last_heartbeat_at=NOW()`,
-		req.ID, req.ClusterID, req.NodeName, req.CurrentConfigChecksum)
+	capabilities, err := json.Marshal(control.NormalizeAgentCapabilities(req.Capabilities))
+	if err != nil {
+		return err
+	}
+	_, err = d.db.ExecContext(ctx, `INSERT INTO agents (id,cluster_id,node_name,current_config_checksum,capabilities,last_heartbeat_at)
+		VALUES (?,?,?,?,?,NOW())
+		ON DUPLICATE KEY UPDATE current_config_checksum=VALUES(current_config_checksum), capabilities=VALUES(capabilities), last_heartbeat_at=NOW()`,
+		req.ID, req.ClusterID, req.NodeName, req.CurrentConfigChecksum, string(capabilities))
 	return err
 }
 
@@ -336,18 +344,21 @@ func scanPolicy(row rowScanner) (control.Policy, error) {
 	return p, nil
 }
 
-const selectAgentSQL = `SELECT id,cluster_id,node_name,pod_name,namespace,agent_version,filebeat_version,current_config_checksum,COALESCE(CAST(node_labels AS CHAR),'{}'),last_heartbeat_at,last_apply_status,COALESCE(last_apply_message,''),last_apply_checksum,updated_at FROM agents`
+const selectAgentSQL = `SELECT id,cluster_id,node_name,pod_name,namespace,agent_version,filebeat_version,current_config_checksum,COALESCE(CAST(node_labels AS CHAR),'{}'),COALESCE(CAST(capabilities AS CHAR),'{}'),last_heartbeat_at,last_apply_status,COALESCE(last_apply_message,''),last_apply_checksum,updated_at FROM agents`
 
 func scanAgent(row rowScanner) (control.Agent, error) {
 	var a control.Agent
 	var labels string
+	var capabilities string
 	var heartbeat sql.NullTime
 	if err := row.Scan(&a.ID, &a.ClusterID, &a.NodeName, &a.PodName, &a.Namespace, &a.AgentVersion, &a.FilebeatVersion,
-		&a.CurrentConfigChecksum, &labels, &heartbeat, &a.LastApplyStatus, &a.LastApplyMessage, &a.LastApplyChecksum, &a.UpdatedAt); err != nil {
+		&a.CurrentConfigChecksum, &labels, &capabilities, &heartbeat, &a.LastApplyStatus, &a.LastApplyMessage, &a.LastApplyChecksum, &a.UpdatedAt); err != nil {
 		return control.Agent{}, err
 	}
 	a.NodeLabels = map[string]string{}
 	_ = json.Unmarshal([]byte(labels), &a.NodeLabels)
+	_ = json.Unmarshal([]byte(capabilities), &a.Capabilities)
+	a.Capabilities = control.NormalizeAgentCapabilities(a.Capabilities)
 	if heartbeat.Valid {
 		a.LastHeartbeatAt = &heartbeat.Time
 	}

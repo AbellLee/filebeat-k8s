@@ -50,6 +50,22 @@ Default Control Server URL:
 http://localhost:18080
 ```
 
+## Kubernetes log path adaptation
+
+Policies keep using stable Filebeat paths managed by the sidecar:
+
+- `container_stdio`: `/var/log/klog-stdio/{namespace}/{controllerType}/{controllerName}/*/containers/{container}/*.log`
+- `container_file`: `/var/log/klog/{namespace}/{controllerType}/{controllerName}/*/containers/{container}/{logPath}`
+
+The sidecar auto-detects the Kubernetes profile, container runtime, stdout log directory, and container rootfs capability on each node. `container_stdio` is the recommended cross-cloud path because it is backed by node stdout logs such as `/var/log/containers/*.log`. `container_file` is best-effort: it requires resolving the container rootfs through `/proc/<pid>/root` or containerd state. When rootfs access is unavailable, the agent reports `container_file=degraded/unsupported` and Grafana shows the reason.
+
+Useful sidecar env vars:
+
+- `K8S_PROFILE=auto`: `auto|generic|ack|eks|gke|aks|tke`
+- `CONTAINER_FILE_MODE=auto`: `auto|disabled|required`
+- `STDIO_LOG_DIR_CANDIDATES`: comma-separated stdout log directories
+- `CONTAINERD_STATE_DIR_CANDIDATES`: comma-separated containerd state directories
+
 ## Kubernetes
 
 Build local images:

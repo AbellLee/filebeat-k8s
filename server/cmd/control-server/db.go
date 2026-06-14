@@ -106,6 +106,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			filebeat_version VARCHAR(128) NOT NULL DEFAULT '',
 			current_config_checksum VARCHAR(128) NOT NULL DEFAULT '',
 			node_labels JSON NULL,
+			capabilities JSON NULL,
 			last_heartbeat_at TIMESTAMP NULL,
 			last_apply_status VARCHAR(64) NOT NULL DEFAULT '',
 			last_apply_message TEXT,
@@ -128,7 +129,10 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
-	return ensurePolicyInputConfigColumn(ctx, db)
+	if err := ensurePolicyInputConfigColumn(ctx, db); err != nil {
+		return err
+	}
+	return ensureAgentCapabilitiesColumn(ctx, db)
 }
 
 func ensurePolicyInputConfigColumn(ctx context.Context, db *sql.DB) error {
@@ -143,5 +147,20 @@ func ensurePolicyInputConfigColumn(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 	_, err = db.ExecContext(ctx, `ALTER TABLE policies ADD COLUMN input_config JSON NULL AFTER custom_fields`)
+	return err
+}
+
+func ensureAgentCapabilitiesColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*)
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agents' AND COLUMN_NAME = 'capabilities'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE agents ADD COLUMN capabilities JSON NULL AFTER node_labels`)
 	return err
 }

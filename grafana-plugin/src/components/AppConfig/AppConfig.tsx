@@ -75,6 +75,11 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
         {message && <Alert title="连接正常" severity="success">{message}</Alert>}
         {error && <Alert title="配置错误" severity="error">{error}</Alert>}
 
+        <div className={s.note}>
+          多云日志路径适配由 control-sidecar 在每个节点自动探测。推荐优先使用 container_stdio；
+          container_file 依赖容器 rootfs 能力，实际可用性请在 Agents 页面查看。
+        </div>
+
         <Field
           label="controlServerUrl"
           description="Grafana 插件后端访问 filebeat-k8s control-server 的地址。Docker Compose 默认使用 http://control-server:8080。"
@@ -124,6 +129,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: flex;
     gap: ${theme.spacing(1)};
     margin-top: ${theme.spacing(3)};
+  `,
+  note: css`
+    margin-bottom: ${theme.spacing(2)};
+    color: ${theme.colors.text.secondary};
+    max-width: 720px;
   `,
 });
 

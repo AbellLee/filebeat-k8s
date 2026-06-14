@@ -11,7 +11,7 @@ spec:
   containers:
     - name: control-sidecar
       image: localhost:5000/filebeat-ops-sidecar:codex-smoke
-      imagePullPolicy: Never
+      imagePullPolicy: IfNotPresent
       command: ["sh", "-ec", "/usr/local/bin/control-sidecar; sleep 3600"]
       env:
         - name: CONTROL_SERVER_URL
@@ -42,17 +42,46 @@ spec:
           value: 1s
         - name: RUN_ONCE
           value: "true"
+        - name: K8S_PROFILE
+          value: auto
+        - name: CONTAINER_FILE_MODE
+          value: auto
         - name: KLOG_DIR
           value: /tmp/klog
         - name: KLOG_STDIO_DIR
           value: /tmp/klog-stdio
+        - name: STDIO_LOG_DIR_CANDIDATES
+          value: /var/log/containers,/hostfs/var/log/containers
+        - name: CONTAINERD_STATE_DIR_CANDIDATES
+          value: /run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io,/run/containerd/io.containerd.runtime.v2.task/k8s.io,/var/run/containerd/io.containerd.runtime.v2.task/k8s.io,/data/container/state/io.containerd.runtime.v2.task/k8s.io
         - name: HOSTFS_DIR
-          value: /
+          value: /hostfs
         - name: HOSTPROC_DIR
-          value: /proc
+          value: /hostproc
       volumeMounts:
         - name: inputs
           mountPath: /inputs
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: hostfs
+          mountPath: /hostfs
+          readOnly: true
+        - name: hostproc
+          mountPath: /hostproc
+          readOnly: true
   volumes:
     - name: inputs
       emptyDir: {}
+    - name: varlog
+      hostPath:
+        path: /var/log
+        type: Directory
+    - name: hostfs
+      hostPath:
+        path: /
+        type: Directory
+    - name: hostproc
+      hostPath:
+        path: /proc
+        type: Directory

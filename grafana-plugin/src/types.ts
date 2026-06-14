@@ -44,11 +44,28 @@ export interface Agent {
   filebeat_version?: string;
   current_config_checksum?: string;
   node_labels?: Record<string, string>;
+  capabilities?: AgentCapabilities;
   last_heartbeat_at?: string;
   last_apply_status?: string;
   last_apply_message?: string;
   last_apply_checksum?: string;
   updated_at?: string;
+}
+
+export type CapabilityStatus = 'ok' | 'degraded' | 'unsupported' | 'unknown' | string;
+
+export interface CapabilityDetail {
+  status: CapabilityStatus;
+  reason?: string;
+  detected_path?: string;
+  detected_paths?: string[];
+}
+
+export interface AgentCapabilities {
+  profile: string;
+  runtime: string;
+  stdio: CapabilityDetail;
+  container_file: CapabilityDetail;
 }
 
 export interface WorkloadOption {
@@ -61,12 +78,16 @@ export interface PodOption {
   namespace: string;
   name: string;
   node_name: string;
+  controller_type?: string;
+  controller_name?: string;
 }
 
 export interface ContainerOption {
   namespace: string;
   pod: string;
   name: string;
+  controller_type?: string;
+  controller_name?: string;
 }
 
 export interface ClusterOptions {

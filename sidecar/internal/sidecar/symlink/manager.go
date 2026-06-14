@@ -18,14 +18,17 @@ import (
 )
 
 type Config struct {
-	NodeName            string
-	KlogDir             string
-	KlogStdioDir        string
-	HostFSDir           string
-	HostProcDir         string
-	ContainerdStateDir  string
-	VarLogContainersDir string
-	ReconcileInterval   time.Duration
+	NodeName                     string
+	KlogDir                      string
+	KlogStdioDir                 string
+	HostFSDir                    string
+	HostProcDir                  string
+	ContainerdStateDir           string
+	ContainerdStateDirCandidates []string
+	VarLogContainersDir          string
+	StdioEnabled                 bool
+	ContainerFileEnabled         bool
+	ReconcileInterval            time.Duration
 }
 
 type Manager struct {
@@ -54,6 +57,10 @@ func NewManagerWithClient(cfg Config, client kubernetes.Interface, logger *slog.
 	if cfg.VarLogContainersDir == "" {
 		cfg.VarLogContainersDir = "/var/log/containers"
 	}
+	if !cfg.StdioEnabled && !cfg.ContainerFileEnabled {
+		cfg.StdioEnabled = true
+		cfg.ContainerFileEnabled = true
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -62,10 +69,11 @@ func NewManagerWithClient(cfg Config, client kubernetes.Interface, logger *slog.
 		client: client,
 		log:    logger,
 		resolver: RootfsResolver{
-			HostFSDir:          cfg.HostFSDir,
-			HostProcDir:        cfg.HostProcDir,
-			ContainerdStateDir: cfg.ContainerdStateDir,
-			MaxProcScan:        4096,
+			HostFSDir:                    cfg.HostFSDir,
+			HostProcDir:                  cfg.HostProcDir,
+			ContainerdStateDir:           cfg.ContainerdStateDir,
+			ContainerdStateDirCandidates: cfg.ContainerdStateDirCandidates,
+			MaxProcScan:                  4096,
 		},
 	}
 }
@@ -109,10 +117,18 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			activePodDirs[dir] = true
 		}
 	}
-	if err := m.cleanupOrphans(m.cfg.KlogDir, activePodDirs); err != nil && firstErr == nil {
+	if m.cfg.ContainerFileEnabled {
+		if err := m.cleanupOrphans(m.cfg.KlogDir, activePodDirs); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	} else if err := m.cleanupOrphans(m.cfg.KlogDir, map[string]bool{}); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if err := m.cleanupOrphans(m.cfg.KlogStdioDir, activePodDirs); err != nil && firstErr == nil {
+	if m.cfg.StdioEnabled {
+		if err := m.cleanupOrphans(m.cfg.KlogStdioDir, activePodDirs); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	} else if err := m.cleanupOrphans(m.cfg.KlogStdioDir, map[string]bool{}); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return firstErr
@@ -122,29 +138,42 @@ func (m *Manager) syncPod(ctx context.Context, pod *corev1.Pod) ([]string, error
 	controllerType, controllerName := m.ResolveControllerIdentity(ctx, pod)
 	podDirRoot := filepath.Join(m.cfg.KlogDir, control.SafePathSegment(pod.Namespace), controllerType, controllerName, control.SafePathSegment(pod.Name))
 	podDirStdio := filepath.Join(m.cfg.KlogStdioDir, control.SafePathSegment(pod.Namespace), controllerType, controllerName, control.SafePathSegment(pod.Name))
+	podDirs := []string{}
 	var firstErr error
+	syncContainerFiles := m.cfg.ContainerFileEnabled && pod.Status.Phase == corev1.PodRunning
 	for _, status := range pod.Status.ContainerStatuses {
-		containerID := normalizeContainerID(status.ContainerID)
-		if containerID == "" {
-			continue
-		}
-		root, strategy, err := m.resolver.Resolve(containerID)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
+		if syncContainerFiles {
+			containerID := normalizeContainerID(status.ContainerID)
+			if containerID != "" {
+				root, strategy, err := m.resolver.Resolve(containerID)
+				if err != nil {
+					if firstErr == nil {
+						firstErr = err
+					}
+				} else {
+					linkPath := filepath.Join(podDirRoot, "containers", control.SafePathSegment(status.Name))
+					if err := ensureSymlink(linkPath, root); err != nil && firstErr == nil {
+						firstErr = err
+					}
+					m.log.Debug("rootfs symlink synced", "pod", pod.Name, "container", status.Name, "strategy", strategy)
+				}
 			}
-		} else {
-			linkPath := filepath.Join(podDirRoot, "containers", control.SafePathSegment(status.Name))
-			if err := ensureSymlink(linkPath, root); err != nil && firstErr == nil {
-				firstErr = err
-			}
-			m.log.Debug("rootfs symlink synced", "pod", pod.Name, "container", status.Name, "strategy", strategy)
 		}
-		if err := m.syncStdioLinks(pod, status.Name, podDirStdio); err != nil && firstErr == nil {
-			firstErr = err
+		if m.cfg.StdioEnabled {
+			if err := m.syncStdioLinks(pod, status.Name, podDirStdio); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+			}
 		}
 	}
-	return []string{podDirRoot, podDirStdio}, firstErr
+	if syncContainerFiles {
+		podDirs = append(podDirs, podDirRoot)
+	}
+	if m.cfg.StdioEnabled {
+		podDirs = append(podDirs, podDirStdio)
+	}
+	return podDirs, firstErr
 }
 
 func (m *Manager) syncStdioLinks(pod *corev1.Pod, containerName, podDirStdio string) error {

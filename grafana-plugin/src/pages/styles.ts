@@ -220,11 +220,13 @@ export const getPageStyles = (theme: GrafanaTheme2) => ({
     background: ${theme.colors.info.transparent};
     padding: ${theme.spacing(1.5)};
     border-radius: ${theme.shape.radius.default};
+    overflow-wrap: anywhere;
   `,
   error: css`
     border-left: 3px solid ${theme.colors.error.border};
     background: ${theme.colors.error.transparent};
     padding: ${theme.spacing(1.5)};
     border-radius: ${theme.shape.radius.default};
+    overflow-wrap: anywhere;
   `,
 });

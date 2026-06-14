@@ -63,13 +63,15 @@ type AgentRegisterRequest struct {
 	FilebeatVersion       string            `json:"filebeat_version,omitempty"`
 	CurrentConfigChecksum string            `json:"current_config_checksum,omitempty"`
 	NodeLabels            map[string]string `json:"node_labels,omitempty"`
+	Capabilities          AgentCapabilities `json:"capabilities,omitempty"`
 }
 
 type AgentHeartbeatRequest struct {
-	ID                    string `json:"id"`
-	ClusterID             string `json:"cluster_id,omitempty"`
-	NodeName              string `json:"node_name,omitempty"`
-	CurrentConfigChecksum string `json:"current_config_checksum,omitempty"`
+	ID                    string            `json:"id"`
+	ClusterID             string            `json:"cluster_id,omitempty"`
+	NodeName              string            `json:"node_name,omitempty"`
+	CurrentConfigChecksum string            `json:"current_config_checksum,omitempty"`
+	Capabilities          AgentCapabilities `json:"capabilities,omitempty"`
 }
 
 type AgentApplyResultRequest struct {
@@ -89,6 +91,7 @@ type Agent struct {
 	FilebeatVersion       string            `json:"filebeat_version,omitempty"`
 	CurrentConfigChecksum string            `json:"current_config_checksum,omitempty"`
 	NodeLabels            map[string]string `json:"node_labels,omitempty"`
+	Capabilities          AgentCapabilities `json:"capabilities"`
 	LastHeartbeatAt       *time.Time        `json:"last_heartbeat_at,omitempty"`
 	LastApplyStatus       string            `json:"last_apply_status,omitempty"`
 	LastApplyMessage      string            `json:"last_apply_message,omitempty"`
@@ -101,4 +104,44 @@ func AgentID(clusterID, nodeName string) string {
 		return ""
 	}
 	return clusterID + ":" + nodeName
+}
+
+const (
+	CapabilityStatusOK          = "ok"
+	CapabilityStatusDegraded    = "degraded"
+	CapabilityStatusUnsupported = "unsupported"
+	CapabilityStatusUnknown     = "unknown"
+)
+
+type AgentCapabilities struct {
+	Profile       string           `json:"profile"`
+	Runtime       string           `json:"runtime"`
+	Stdio         CapabilityDetail `json:"stdio"`
+	ContainerFile CapabilityDetail `json:"container_file"`
+}
+
+type CapabilityDetail struct {
+	Status        string   `json:"status"`
+	Reason        string   `json:"reason,omitempty"`
+	DetectedPath  string   `json:"detected_path,omitempty"`
+	DetectedPaths []string `json:"detected_paths,omitempty"`
+}
+
+func NormalizeAgentCapabilities(capabilities AgentCapabilities) AgentCapabilities {
+	if capabilities.Profile == "" {
+		capabilities.Profile = CapabilityStatusUnknown
+	}
+	if capabilities.Runtime == "" {
+		capabilities.Runtime = CapabilityStatusUnknown
+	}
+	capabilities.Stdio = normalizeCapabilityDetail(capabilities.Stdio)
+	capabilities.ContainerFile = normalizeCapabilityDetail(capabilities.ContainerFile)
+	return capabilities
+}
+
+func normalizeCapabilityDetail(detail CapabilityDetail) CapabilityDetail {
+	if detail.Status == "" {
+		detail.Status = CapabilityStatusUnknown
+	}
+	return detail
 }

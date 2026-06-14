@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PluginPage } from '@grafana/runtime';
 import { Alert, Button, LinkButton, Modal, useStyles2 } from '@grafana/ui';
 import { api } from '../api/client';
-import { Policy, PolicyRevision } from '../types';
+import { Agent, Policy, PolicyRevision } from '../types';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
 import { formatDate, policyScope, shortChecksum } from './utils';
@@ -14,6 +14,7 @@ function PolicyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [policy, setPolicy] = useState<Policy | undefined>();
   const [revisions, setRevisions] = useState<PolicyRevision[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [rollbackTarget, setRollbackTarget] = useState<PolicyRevision | undefined>();
   const [error, setError] = useState('');
 
@@ -21,16 +22,26 @@ function PolicyDetailPage() {
     if (!id) {
       return;
     }
-    Promise.all([api.getPolicy(id), api.listRevisions(id)])
-      .then(([policyData, revisionData]) => {
+    Promise.all([api.getPolicy(id), api.listRevisions(id), api.listAgents()])
+      .then(([policyData, revisionData, agentData]) => {
         setPolicy(policyData);
         setRevisions(revisionData);
+        setAgents(agentData);
         setError('');
       })
       .catch((err) => setError(err.message));
   };
 
   useEffect(load, [id]);
+
+  const containerFileSummary = useMemo(() => {
+    if (!policy || policy.log_type !== 'container_file') {
+      return undefined;
+    }
+    const matching = agents.filter((agent) => agent.cluster_id === policy.cluster_id && nodeSelectorMatches(policy.node_selector || '', agent.node_labels ?? {}));
+    const unsupported = matching.filter((agent) => agent.capabilities?.container_file?.status !== 'ok');
+    return { matching, unsupported };
+  }, [agents, policy]);
 
   const rollback = async () => {
     if (!id || !rollbackTarget) {
@@ -73,6 +84,11 @@ function PolicyDetailPage() {
         </div>
 
         {error && <Alert title="操作失败" severity="error">{error}</Alert>}
+        {containerFileSummary && containerFileSummary.matching.length > 0 && containerFileSummary.unsupported.length > 0 && (
+          <Alert title="container_file 节点能力不足" severity="warning">
+            {containerFileSummary.unsupported.length}/{containerFileSummary.matching.length} 个匹配 Agent 当前不支持容器内文件采集，请在 Agents 页面查看原因。
+          </Alert>
+        )}
 
         <div className={s.grid4}>
           <Summary label="policy_id" value={policy.id} />
@@ -153,6 +169,22 @@ function Summary({ label, value }: { label: string; value: string }) {
       <div className={`${s.metricValue} ${s.mono}`} style={{ fontSize: 15 }}>{value || '-'}</div>
     </section>
   );
+}
+
+function nodeSelectorMatches(selector: string, labels: Record<string, string>): boolean {
+  const trimmed = selector.trim();
+  if (!trimmed) {
+    return true;
+  }
+  for (const segment of trimmed.split(',')) {
+    const [rawKey, rawValue] = segment.split('=');
+    const key = rawKey?.trim();
+    const value = rawValue?.trim();
+    if (!key || !value || labels[key] !== value) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export default PolicyDetailPage;

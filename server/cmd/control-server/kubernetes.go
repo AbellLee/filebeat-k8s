@@ -50,15 +50,19 @@ type WorkloadOption struct {
 }
 
 type PodOption struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	NodeName  string `json:"node_name"`
+	Namespace      string `json:"namespace"`
+	Name           string `json:"name"`
+	NodeName       string `json:"node_name"`
+	ControllerType string `json:"controller_type,omitempty"`
+	ControllerName string `json:"controller_name,omitempty"`
 }
 
 type ContainerOption struct {
-	Namespace string `json:"namespace"`
-	Pod       string `json:"pod"`
-	Name      string `json:"name"`
+	Namespace      string `json:"namespace"`
+	Pod            string `json:"pod"`
+	Name           string `json:"name"`
+	ControllerType string `json:"controller_type,omitempty"`
+	ControllerName string `json:"controller_name,omitempty"`
 }
 
 func (s *server) clusterOptions(c *gin.Context) {
@@ -113,13 +117,36 @@ func appendWorkloads(ctx context.Context, client kubernetes.Interface, options *
 }
 
 func appendPods(ctx context.Context, client kubernetes.Interface, options *ClusterOptions) {
+	replicaSetOwners := replicaSetOwnerIndex(ctx, client)
+	jobOwners := jobOwnerIndex(ctx, client)
 	pods, _ := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 	for _, pod := range pods.Items {
-		options.Pods = append(options.Pods, PodOption{Namespace: pod.Namespace, Name: pod.Name, NodeName: pod.Spec.NodeName})
+		controllerType, controllerName := controllerScopeForPod(pod, replicaSetOwners, jobOwners)
+		options.Pods = append(options.Pods, PodOption{
+			Namespace:      pod.Namespace,
+			Name:           pod.Name,
+			NodeName:       pod.Spec.NodeName,
+			ControllerType: controllerType,
+			ControllerName: controllerName,
+		})
 		for _, c := range pod.Spec.Containers {
-			options.Containers = append(options.Containers, ContainerOption{Namespace: pod.Namespace, Pod: pod.Name, Name: c.Name})
+			options.Containers = append(options.Containers, ContainerOption{
+				Namespace:      pod.Namespace,
+				Pod:            pod.Name,
+				Name:           c.Name,
+				ControllerType: controllerType,
+				ControllerName: controllerName,
+			})
 		}
 	}
+	sort.Slice(options.Pods, func(i, j int) bool {
+		a, b := options.Pods[i], options.Pods[j]
+		return a.Namespace+"/"+a.ControllerType+"/"+a.ControllerName+"/"+a.Name < b.Namespace+"/"+b.ControllerType+"/"+b.ControllerName+"/"+b.Name
+	})
+	sort.Slice(options.Containers, func(i, j int) bool {
+		a, b := options.Containers[i], options.Containers[j]
+		return a.Namespace+"/"+a.ControllerType+"/"+a.ControllerName+"/"+a.Pod+"/"+a.Name < b.Namespace+"/"+b.ControllerType+"/"+b.ControllerName+"/"+b.Pod+"/"+b.Name
+	})
 }
 
 func appendNodeLabels(ctx context.Context, client kubernetes.Interface, options *ClusterOptions) {
@@ -357,6 +384,41 @@ func controllerNameFromOwner(pod corev1.Pod) (string, string) {
 	}
 	owner := pod.OwnerReferences[0]
 	return strings.ToLower(owner.Kind), owner.Name
+}
+
+func replicaSetOwnerIndex(ctx context.Context, client kubernetes.Interface) map[string]WorkloadOption {
+	index := map[string]WorkloadOption{}
+	replicaSets, _ := client.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+	for _, rs := range replicaSets.Items {
+		controllerType, controllerName := normalizeDeploymentOwner(rs)
+		index[objectKey(rs.Namespace, "replicaset", rs.Name)] = workload(rs.Namespace, controllerType, controllerName)
+	}
+	return index
+}
+
+func jobOwnerIndex(ctx context.Context, client kubernetes.Interface) map[string]WorkloadOption {
+	index := map[string]WorkloadOption{}
+	jobs, _ := client.BatchV1().Jobs("").List(ctx, metav1.ListOptions{})
+	for _, job := range jobs.Items {
+		controllerType, controllerName := normalizeCronJobOwner(job)
+		index[objectKey(job.Namespace, "job", job.Name)] = workload(job.Namespace, controllerType, controllerName)
+	}
+	return index
+}
+
+func controllerScopeForPod(pod corev1.Pod, replicaSetOwners, jobOwners map[string]WorkloadOption) (string, string) {
+	controllerType, controllerName := controllerNameFromOwner(pod)
+	switch controllerType {
+	case "replicaset":
+		if owner, ok := replicaSetOwners[objectKey(pod.Namespace, "replicaset", controllerName)]; ok {
+			return owner.ControllerType, owner.Name
+		}
+	case "job":
+		if owner, ok := jobOwners[objectKey(pod.Namespace, "job", controllerName)]; ok {
+			return owner.ControllerType, owner.Name
+		}
+	}
+	return controllerType, controllerName
 }
 
 func normalizeDeploymentOwner(rs appsv1.ReplicaSet) (string, string) {

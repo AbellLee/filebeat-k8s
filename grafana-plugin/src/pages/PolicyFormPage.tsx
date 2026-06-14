@@ -1,13 +1,16 @@
 import React, { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PluginPage } from '@grafana/runtime';
-import { Alert, Button, LinkButton, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Combobox, ComboboxOption, LinkButton, useStyles2 } from '@grafana/ui';
 import { api } from '../api/client';
-import { ClusterOptions, Policy } from '../types';
+import { ClusterOptions, LogType, Policy } from '../types';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
 import { customFieldsFromText, customFieldsToText, emptyPolicy, inputConfigFromYaml, inputConfigToYaml } from './utils';
 import { getPageStyles } from './styles';
+
+const controllerTypeOptions = ['deployment', 'statefulset', 'daemonset', 'job', 'cronjob', 'pod', 'replicaset'];
+const logTypeOptions: LogType[] = ['container_stdio', 'container_file', 'host_file'];
 
 function PolicyFormPage() {
   const s = useStyles2(getPageStyles);
@@ -30,6 +33,59 @@ function PolicyFormPage() {
       return { config: {}, error: (err as Error).message };
     }
   }, [inputConfig]);
+
+  const isHostFile = policy.log_type === 'host_file';
+  const selectedNamespace = policy.namespace || '';
+  const selectedControllerType = policy.controller_type || '';
+  const selectedControllerName = policy.controller_name || '';
+
+  const namespaceOptions = useMemo(() => options?.namespaces ?? [], [options]);
+
+  const availableControllerTypes = useMemo(() => {
+    if (!selectedNamespace) {
+      return controllerTypeOptions;
+    }
+    const available = new Set<string>();
+    for (const workload of options?.workloads ?? []) {
+      if (workload.namespace === selectedNamespace) {
+        available.add(workload.controller_type);
+      }
+    }
+    if ((options?.pods ?? []).some((pod) => pod.namespace === selectedNamespace)) {
+      available.add('pod');
+    }
+    return available.size > 0 ? controllerTypeOptions.filter((type) => available.has(type)) : controllerTypeOptions;
+  }, [options, selectedNamespace]);
+
+  const controllerNameOptions = useMemo(() => {
+    if (!selectedNamespace || !selectedControllerType) {
+      return [];
+    }
+    if (selectedControllerType === 'pod') {
+      return (options?.pods ?? []).filter((pod) => pod.namespace === selectedNamespace).map((pod) => pod.name);
+    }
+    return (options?.workloads ?? [])
+      .filter((workload) => workload.namespace === selectedNamespace && workload.controller_type === selectedControllerType)
+      .map((workload) => workload.name);
+  }, [options, selectedControllerType, selectedNamespace]);
+
+  const containerNameOptions = useMemo(() => {
+    if (!selectedNamespace || !selectedControllerType || !selectedControllerName) {
+      return [];
+    }
+    const containers = options?.containers ?? [];
+    return containers
+      .filter((container) => {
+        if (container.namespace !== selectedNamespace) {
+          return false;
+        }
+        if (container.controller_type || container.controller_name) {
+          return container.controller_type === selectedControllerType && container.controller_name === selectedControllerName;
+        }
+        return selectedControllerType === 'pod' && container.pod === selectedControllerName;
+      })
+      .map((container) => container.name);
+  }, [options, selectedControllerName, selectedControllerType, selectedNamespace]);
 
   useEffect(() => {
     api.clusterOptions().then(setOptions).catch(() => undefined);
@@ -69,7 +125,28 @@ function PolicyFormPage() {
   }, [customFields, parsedInputConfig, policy]);
 
   const update = (key: keyof Policy, value: string | number | boolean) => {
-    setPolicy({ ...policy, [key]: value });
+    setPolicy((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateScope = (patch: Partial<Policy>) => {
+    setPolicy((current) => ({ ...current, ...patch }));
+  };
+
+  const updateLogType = (value: string) => {
+    if (value === 'host_file') {
+      updateScope({
+        log_type: value,
+        namespace: '',
+        controller_type: '',
+        controller_name: '',
+        container_name: '',
+      });
+      return;
+    }
+    updateScope({
+      log_type: value,
+      controller_type: policy.controller_type || '',
+    });
   };
 
   const onSave = async () => {
@@ -114,30 +191,44 @@ function PolicyFormPage() {
               <Field label="id" value={policy.id} onChange={(value) => update('id', value)} placeholder="payment-app" disabled={isEdit} />
               <Field label="name" value={policy.name} onChange={(value) => update('name', value)} placeholder="payment app" />
               <Field label="cluster_id" value={policy.cluster_id} onChange={(value) => update('cluster_id', value)} placeholder="dev" />
-              <SelectField label="namespace" value={policy.namespace || ''} options={options?.namespaces ?? []} onChange={(value) => update('namespace', value)} />
+              <SelectField
+                label="namespace"
+                value={policy.namespace || ''}
+                options={namespaceOptions}
+                onChange={(value) => updateScope({ namespace: value, controller_type: '', controller_name: '', container_name: '' })}
+                disabled={isHostFile}
+                placeholder={isHostFile ? 'host_file 不需要 namespace' : '选择 namespace'}
+              />
               <SelectField
                 label="controller_type"
                 value={policy.controller_type || ''}
-                options={['deployment', 'statefulset', 'daemonset', 'job', 'cronjob', 'pod', 'replicaset']}
-                onChange={(value) => update('controller_type', value)}
+                options={availableControllerTypes}
+                onChange={(value) => updateScope({ controller_type: value, controller_name: '', container_name: '' })}
+                disabled={isHostFile || !selectedNamespace}
+                placeholder={!selectedNamespace ? '先选择 namespace' : '选择 controller_type'}
               />
               <SelectField
                 label="controller_name"
                 value={policy.controller_name || ''}
-                options={(options?.workloads ?? []).filter((workload) => !policy.namespace || workload.namespace === policy.namespace).map((workload) => workload.name)}
-                onChange={(value) => update('controller_name', value)}
+                options={controllerNameOptions}
+                onChange={(value) => updateScope({ controller_name: value, container_name: '' })}
+                disabled={isHostFile || !selectedNamespace || !selectedControllerType}
+                placeholder={!selectedNamespace ? '先选择 namespace' : !selectedControllerType ? '先选择 controller_type' : '选择 controller_name'}
               />
               <SelectField
                 label="container_name"
                 value={policy.container_name || ''}
-                options={(options?.containers ?? []).filter((container) => !policy.namespace || container.namespace === policy.namespace).map((container) => container.name)}
+                options={containerNameOptions}
                 onChange={(value) => update('container_name', value)}
+                disabled={isHostFile || !selectedControllerName}
+                placeholder={!selectedControllerName ? '先选择 controller_name' : '选择 container_name'}
               />
               <SelectField
                 label="log_type"
                 value={policy.log_type}
-                options={['container_stdio', 'container_file', 'host_file']}
-                onChange={(value) => update('log_type', value)}
+                options={logTypeOptions}
+                onChange={updateLogType}
+                placeholder="选择 log_type"
               />
               <Field label="priority" value={String(policy.priority)} onChange={(value) => update('priority', Number(value) || 0)} />
               <div className={s.field}>
@@ -211,18 +302,27 @@ interface SelectFieldProps {
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
 }
 
-function SelectField({ label, value, options, onChange }: SelectFieldProps) {
+function SelectField({ label, value, options, onChange, placeholder, disabled }: SelectFieldProps) {
   const s = useStyles2(getPageStyles);
-  const uniqueOptions = Array.from(new Set(options.filter(Boolean))).sort();
+  const uniqueOptions = Array.from(new Set([...options, value].filter(Boolean))).sort();
+  const selectOptions: Array<ComboboxOption<string>> = uniqueOptions.map((option) => ({ label: option, value: option }));
   return (
     <div className={s.field}>
       <label>{label}</label>
-      <input className={s.input} value={value} list={`${label}-options`} onChange={(event) => onChange(event.target.value)} />
-      <datalist id={`${label}-options`}>
-        {uniqueOptions.map((option) => <option key={option} value={option} />)}
-      </datalist>
+      <Combobox
+        value={value || null}
+        options={selectOptions}
+        placeholder={placeholder}
+        disabled={disabled}
+        isClearable={!disabled}
+        onChange={(selected: ComboboxOption<string> | null) => onChange(selected?.value ?? '')}
+        width="auto"
+        minWidth={20}
+      />
     </div>
   );
 }

@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"filebeat-k8s/internal/control"
 	"filebeat-k8s/sidecar/internal/sidecar/agent"
 	"filebeat-k8s/sidecar/internal/sidecar/apply"
+	"filebeat-k8s/sidecar/internal/sidecar/capability"
 	"filebeat-k8s/sidecar/internal/sidecar/client"
 	"filebeat-k8s/sidecar/internal/sidecar/config"
 	"filebeat-k8s/sidecar/internal/sidecar/symlink"
@@ -36,19 +38,28 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	currentChecksum := r.applier.LoadLastChecksum()
 	identity.CurrentConfigChecksum = currentChecksum
+	capabilities := r.detectCapabilities(ctx)
+	if r.cfg.ContainerFileMode == "required" && capabilities.ContainerFile.Status != control.CapabilityStatusOK {
+		return fmt.Errorf("container_file capability is required but unavailable: %s", capabilities.ContainerFile.Reason)
+	}
 
-	if mgr, err := symlink.NewManager(symlink.Config{
-		NodeName:            r.cfg.NodeName,
-		KlogDir:             r.cfg.KlogDir,
-		KlogStdioDir:        r.cfg.KlogStdioDir,
-		HostFSDir:           r.cfg.HostFSDir,
-		HostProcDir:         r.cfg.HostProcDir,
-		ContainerdStateDir:  r.cfg.ContainerdStateDir,
-		VarLogContainersDir: r.cfg.VarLogContainersDir,
-		ReconcileInterval:   r.cfg.ReconcileInterval,
+	var mgr *symlink.Manager
+	if got, err := symlink.NewManager(symlink.Config{
+		NodeName:                     r.cfg.NodeName,
+		KlogDir:                      r.cfg.KlogDir,
+		KlogStdioDir:                 r.cfg.KlogStdioDir,
+		HostFSDir:                    r.cfg.HostFSDir,
+		HostProcDir:                  r.cfg.HostProcDir,
+		ContainerdStateDir:           r.cfg.ContainerdStateDir,
+		ContainerdStateDirCandidates: r.cfg.ContainerdStateDirCandidates,
+		VarLogContainersDir:          r.cfg.VarLogContainersDir,
+		StdioEnabled:                 true,
+		ContainerFileEnabled:         capabilities.ContainerFile.Status != control.CapabilityStatusUnsupported && r.cfg.ContainerFileMode != "disabled",
+		ReconcileInterval:            r.cfg.ReconcileInterval,
 	}, r.log); err != nil {
 		r.log.Warn("symlink-manager degraded", "error", err)
 	} else {
+		mgr = got
 		go mgr.Run(ctx)
 	}
 
@@ -62,6 +73,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		FilebeatVersion:       identity.FilebeatVersion,
 		CurrentConfigChecksum: identity.CurrentConfigChecksum,
 		NodeLabels:            identity.NodeLabels,
+		Capabilities:          capabilities,
 	}); err != nil {
 		return err
 	}
@@ -69,11 +81,13 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	backoff := r.cfg.PollInterval
 	for {
+		capabilities = r.detectCapabilities(ctx)
 		if err := r.client.Heartbeat(ctx, control.AgentHeartbeatRequest{
 			ID:                    identity.AgentID,
 			ClusterID:             identity.ClusterID,
 			NodeName:              identity.NodeName,
 			CurrentConfigChecksum: currentChecksum,
+			Capabilities:          capabilities,
 		}); err != nil {
 			r.log.Warn("heartbeat failed", "agent_id", identity.AgentID, "error", err)
 		}
@@ -105,6 +119,7 @@ func (r *Runner) Run(ctx context.Context) error {
 					ClusterID:             identity.ClusterID,
 					NodeName:              identity.NodeName,
 					CurrentConfigChecksum: currentChecksum,
+					Capabilities:          r.detectCapabilities(ctx),
 				}); err != nil {
 					r.log.Warn("post-apply heartbeat failed", "agent_id", identity.AgentID, "error", err)
 				}
@@ -112,6 +127,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		if r.cfg.RunOnce {
+			if mgr != nil {
+				if err := mgr.Reconcile(ctx); err != nil {
+					r.log.Warn("run-once symlink reconcile failed", "error", err)
+				}
+			}
 			return nil
 		}
 		sleep(ctx, r.loopSleep())
@@ -126,6 +146,25 @@ func (r *Runner) loopSleep() time.Duration {
 		return time.Second
 	}
 	return r.cfg.PollInterval
+}
+
+func (r *Runner) detectCapabilities(ctx context.Context) control.AgentCapabilities {
+	capabilities := capability.Detect(ctx, capability.Options{
+		NodeName:                     r.cfg.NodeName,
+		PodName:                      r.cfg.PodName,
+		PodNamespace:                 r.cfg.PodNamespace,
+		Profile:                      r.cfg.K8SProfile,
+		ContainerFileMode:            r.cfg.ContainerFileMode,
+		HostFSDir:                    r.cfg.HostFSDir,
+		HostProcDir:                  r.cfg.HostProcDir,
+		ContainerdStateDir:           r.cfg.ContainerdStateDir,
+		StdioLogDirCandidates:        r.cfg.StdioLogDirCandidates,
+		ContainerdStateDirCandidates: r.cfg.ContainerdStateDirCandidates,
+	})
+	if capabilities.Stdio.DetectedPath != "" {
+		r.cfg.VarLogContainersDir = capabilities.Stdio.DetectedPath
+	}
+	return capabilities
 }
 
 func sleep(ctx context.Context, d time.Duration) {

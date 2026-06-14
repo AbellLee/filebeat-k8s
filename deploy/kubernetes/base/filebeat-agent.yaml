@@ -75,10 +75,18 @@ spec:
               value: 25s
             - name: POLL_INTERVAL
               value: 30s
+            - name: K8S_PROFILE
+              value: auto
+            - name: CONTAINER_FILE_MODE
+              value: auto
             - name: KLOG_DIR
               value: /var/log/klog
             - name: KLOG_STDIO_DIR
               value: /var/log/klog-stdio
+            - name: STDIO_LOG_DIR_CANDIDATES
+              value: /var/log/containers,/hostfs/var/log/containers
+            - name: CONTAINERD_STATE_DIR_CANDIDATES
+              value: /run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io,/run/containerd/io.containerd.runtime.v2.task/k8s.io,/var/run/containerd/io.containerd.runtime.v2.task/k8s.io,/data/container/state/io.containerd.runtime.v2.task/k8s.io
             - name: HOSTFS_DIR
               value: /hostfs
             - name: HOSTPROC_DIR

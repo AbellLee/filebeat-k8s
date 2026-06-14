@@ -48,8 +48,12 @@ services:
       NODE_LABELS: nodepool=online,zone=compose
       CONFIG_MODE: poll
       POLL_INTERVAL: 10s
+      K8S_PROFILE: auto
+      CONTAINER_FILE_MODE: auto
       KLOG_DIR: /var/log/klog
       KLOG_STDIO_DIR: /var/log/klog-stdio
+      STDIO_LOG_DIR_CANDIDATES: /var/log/containers,/hostfs/var/log/containers
+      CONTAINERD_STATE_DIR_CANDIDATES: /run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io,/run/containerd/io.containerd.runtime.v2.task/k8s.io,/var/run/containerd/io.containerd.runtime.v2.task/k8s.io,/data/container/state/io.containerd.runtime.v2.task/k8s.io
     volumes:
       - dynamic-inputs:/usr/share/filebeat/inputs.d
 
@@ -60,6 +64,7 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_DEFAULT_APP_MODE: development
       GF_LOG_FILTERS: plugin.filebeat-k8s-app:debug
       GF_LOG_LEVEL: debug
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: filebeat-k8s-app

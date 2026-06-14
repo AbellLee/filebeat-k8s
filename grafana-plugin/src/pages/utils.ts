@@ -6,7 +6,7 @@ export const emptyPolicy = (): Policy => ({
   name: '',
   cluster_id: 'dev',
   namespace: '',
-  controller_type: 'deployment',
+  controller_type: '',
   controller_name: '',
   container_name: '',
   node_selector: '',

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -178,4 +179,79 @@ func TestRenderPolicyPreviewRejectsInvalidPolicy(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
+}
+
+func TestScanAgentNormalizesCapabilities(t *testing.T) {
+	now := time.Now()
+	agent, err := scanAgent(mockRow{
+		"dev:node-1",
+		"dev",
+		"node-1",
+		"agent-pod",
+		"filebeat",
+		"dev",
+		"9.4.1",
+		"sha256:abc",
+		`{"nodepool":"online"}`,
+		`{"profile":"eks","runtime":"containerd","stdio":{"status":"ok","detected_path":"/var/log/containers"},"container_file":{"status":"degraded","reason":"rootfs not found"}}`,
+		sql.NullTime{Time: now, Valid: true},
+		"success",
+		"applied",
+		"sha256:abc",
+		now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agent.Capabilities.Profile != "eks" || agent.Capabilities.Runtime != "containerd" {
+		t.Fatalf("unexpected capabilities: %#v", agent.Capabilities)
+	}
+	if agent.Capabilities.Stdio.Status != "ok" || agent.Capabilities.ContainerFile.Status != "degraded" {
+		t.Fatalf("unexpected capability details: %#v", agent.Capabilities)
+	}
+}
+
+func TestScanAgentDefaultsMissingCapabilities(t *testing.T) {
+	now := time.Now()
+	agent, err := scanAgent(mockRow{
+		"dev:node-1",
+		"dev",
+		"node-1",
+		"",
+		"",
+		"",
+		"",
+		"",
+		`{}`,
+		`{}`,
+		sql.NullTime{},
+		"",
+		"",
+		"",
+		now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agent.Capabilities.Profile != "unknown" || agent.Capabilities.Stdio.Status != "unknown" || agent.Capabilities.ContainerFile.Status != "unknown" {
+		t.Fatalf("missing capabilities not normalized: %#v", agent.Capabilities)
+	}
+}
+
+type mockRow []any
+
+func (r mockRow) Scan(dest ...any) error {
+	for i, value := range r {
+		switch target := dest[i].(type) {
+		case *string:
+			*target = value.(string)
+		case *sql.NullTime:
+			*target = value.(sql.NullTime)
+		case *time.Time:
+			*target = value.(time.Time)
+		default:
+			panic("unsupported scan target")
+		}
+	}
+	return nil
 }
