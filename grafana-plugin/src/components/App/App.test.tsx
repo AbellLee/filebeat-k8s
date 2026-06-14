@@ -40,6 +40,6 @@ describe('Components/App', () => {
     );
 
     // Application is lazy loaded, so we need to wait for the component and routes to be rendered
-    await waitFor(() => expect(queryByText(/日志采集总览/i)).toBeInTheDocument(), { timeout: 2000 });
+    await waitFor(() => expect(queryByText(/Log collection overview/i)).toBeInTheDocument(), { timeout: 2000 });
   });
 });

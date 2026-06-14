@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PluginPage } from '@grafana/runtime';
 import { Alert, Button, LinkButton, useStyles2 } from '@grafana/ui';
+import { t } from '@grafana/i18n';
 import { api } from '../api/client';
 import { Policy } from '../types';
 import { ROUTES } from '../constants';
@@ -69,7 +70,7 @@ function PoliciesPage() {
   };
 
   const deletePolicy = async (policy: Policy) => {
-    if (!window.confirm(`确认删除 policy ${policy.id}？`)) {
+    if (!window.confirm(t('filebeat-k8s-app.policies.confirmDelete', 'Delete policy {{id}}?', { id: policy.id }))) {
       return;
     }
     try {
@@ -86,40 +87,78 @@ function PoliciesPage() {
         <div className={s.header}>
           <div>
             <div className={s.eyebrow}>Filebeat Ops / Policies</div>
-            <h1 className={s.title}>策略 Policies</h1>
-            <div className={s.subtitle}>管理 Filebeat 采集策略，支持启停、编辑、删除和 revision 查看。</div>
+            <h1 className={s.title}>{t('filebeat-k8s-app.policies.title', 'Policies')}</h1>
+            <div className={s.subtitle}>
+              {t(
+                'filebeat-k8s-app.policies.subtitle',
+                'Manage Filebeat collection policies, including enablement, editing, deletion, and revisions.'
+              )}
+            </div>
           </div>
           <LinkButton icon="plus" href={prefixRoute(ROUTES.PolicyNew)}>
-            新建 policy
+            {t('filebeat-k8s-app.policies.newPolicy', 'New policy')}
           </LinkButton>
         </div>
 
-        {error && <Alert title="操作失败" severity="error">{error}</Alert>}
+        {error && (
+          <Alert title={t('filebeat-k8s-app.common.operationFailed', 'Operation failed')} severity="error">
+            {error}
+          </Alert>
+        )}
 
         <section className={s.card}>
           <div className={s.toolbar}>
-            <select className={s.input} value={filters.cluster} onChange={(event) => setFilters({ ...filters, cluster: event.target.value })}>
-              <option value="">cluster: all</option>
-              {clusters.map((cluster) => <option key={cluster} value={cluster}>{cluster}</option>)}
+            <select
+              className={s.input}
+              value={filters.cluster}
+              onChange={(event) => setFilters({ ...filters, cluster: event.target.value })}
+            >
+              <option value="">{t('filebeat-k8s-app.policies.clusterAll', 'cluster: all')}</option>
+              {clusters.map((cluster) => (
+                <option key={cluster} value={cluster}>
+                  {cluster}
+                </option>
+              ))}
             </select>
-            <select className={s.input} value={filters.namespace} onChange={(event) => setFilters({ ...filters, namespace: event.target.value })}>
-              <option value="">namespace: all</option>
-              {namespaces.map((namespace) => <option key={namespace} value={namespace}>{namespace}</option>)}
+            <select
+              className={s.input}
+              value={filters.namespace}
+              onChange={(event) => setFilters({ ...filters, namespace: event.target.value })}
+            >
+              <option value="">{t('filebeat-k8s-app.policies.namespaceAll', 'namespace: all')}</option>
+              {namespaces.map((namespace) => (
+                <option key={namespace} value={namespace}>
+                  {namespace}
+                </option>
+              ))}
             </select>
-            <select className={s.input} value={filters.logType} onChange={(event) => setFilters({ ...filters, logType: event.target.value })}>
-              <option value="">log_type: all</option>
+            <select
+              className={s.input}
+              value={filters.logType}
+              onChange={(event) => setFilters({ ...filters, logType: event.target.value })}
+            >
+              <option value="">{t('filebeat-k8s-app.policies.logTypeAll', 'log_type: all')}</option>
               <option value="container_stdio">container_stdio</option>
               <option value="container_file">container_file</option>
               <option value="host_file">host_file</option>
             </select>
-            <select className={s.input} value={filters.enabled} onChange={(event) => setFilters({ ...filters, enabled: event.target.value })}>
-              <option value="">enabled: all</option>
+            <select
+              className={s.input}
+              value={filters.enabled}
+              onChange={(event) => setFilters({ ...filters, enabled: event.target.value })}
+            >
+              <option value="">{t('filebeat-k8s-app.policies.enabledAll', 'enabled: all')}</option>
               <option value="true">enabled</option>
               <option value="false">disabled</option>
             </select>
-            <input className={s.input} placeholder="搜索 name / id / scope" value={filters.query} onChange={(event) => setFilters({ ...filters, query: event.target.value })} />
+            <input
+              className={s.input}
+              placeholder={t('filebeat-k8s-app.policies.searchPlaceholder', 'Search name / id / scope')}
+              value={filters.query}
+              onChange={(event) => setFilters({ ...filters, query: event.target.value })}
+            />
             <Button variant="secondary" onClick={() => setFilters({ cluster: '', namespace: '', logType: '', enabled: '', query: '' })}>
-              清空
+              {t('filebeat-k8s-app.common.clear', 'Clear')}
             </Button>
           </div>
         </section>
@@ -135,7 +174,7 @@ function PoliciesPage() {
                 <th>revision</th>
                 <th>checksum</th>
                 <th>updated_at</th>
-                <th>actions</th>
+                <th>{t('filebeat-k8s-app.policies.actions', 'actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -146,24 +185,32 @@ function PoliciesPage() {
                     <div className={`${s.muted} ${s.mono}`}>{policy.id}</div>
                   </td>
                   <td className={s.mono}>{policyScope(policy)}</td>
-                  <td><span className={`${s.chip} ${policy.log_type === 'host_file' ? s.chipOrange : s.chipBlue}`}>{policy.log_type}</span></td>
-                  <td><span className={`${s.chip} ${policy.enabled ? s.chipGreen : ''}`}>{policy.enabled ? 'enabled' : 'disabled'}</span></td>
+                  <td>
+                    <span className={`${s.chip} ${policy.log_type === 'host_file' ? s.chipOrange : s.chipBlue}`}>
+                      {policy.log_type}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`${s.chip} ${policy.enabled ? s.chipGreen : ''}`}>
+                      {policy.enabled ? 'enabled' : 'disabled'}
+                    </span>
+                  </td>
                   <td>{policy.current_revision}</td>
                   <td className={s.mono}>{shortChecksum(policy.rendered_checksum)}</td>
                   <td>{formatDate(policy.updated_at)}</td>
                   <td>
                     <div className={s.rowActions}>
                       <LinkButton size="sm" variant="secondary" href={prefixRoute(`policies/${encodeURIComponent(policy.id)}`)}>
-                        详情
+                        {t('filebeat-k8s-app.common.details', 'Details')}
                       </LinkButton>
                       <LinkButton size="sm" variant="secondary" href={prefixRoute(`policies/${encodeURIComponent(policy.id)}/edit`)}>
-                        编辑
+                        {t('filebeat-k8s-app.common.edit', 'Edit')}
                       </LinkButton>
                       <Button size="sm" variant="secondary" onClick={() => togglePolicy(policy)}>
-                        {policy.enabled ? '停用' : '启用'}
+                        {policy.enabled ? t('filebeat-k8s-app.common.disable', 'Disable') : t('filebeat-k8s-app.common.enable', 'Enable')}
                       </Button>
                       <Button size="sm" variant="destructive" onClick={() => deletePolicy(policy)}>
-                        删除
+                        {t('filebeat-k8s-app.common.delete', 'Delete')}
                       </Button>
                     </div>
                   </td>
@@ -171,7 +218,9 @@ function PoliciesPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className={s.muted}>没有匹配的 policy。</td>
+                  <td colSpan={8} className={s.muted}>
+                    {t('filebeat-k8s-app.policies.noMatches', 'No matching policies.')}
+                  </td>
                 </tr>
               )}
             </tbody>

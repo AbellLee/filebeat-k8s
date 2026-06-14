@@ -4,6 +4,7 @@ import { css } from '@emotion/css';
 import { AppPluginMeta, GrafanaTheme2, PluginConfigPageProps, PluginMeta } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
 import { Alert, Button, Field, FieldSet, Input, SecretInput, useStyles2 } from '@grafana/ui';
+import { t, Trans } from '@grafana/i18n';
 import pluginJson from '../../plugin.json';
 import { AppPluginSettings } from '../../types';
 import { testIds } from '../testIds';
@@ -38,7 +39,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!state.controlServerUrl) {
-      setError('controlServerUrl is required');
+      setError(t('filebeat-k8s-app.settings.controlServerRequired', 'controlServerUrl is required'));
       return;
     }
     updatePluginAndReload(plugin.meta.id, {
@@ -63,7 +64,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
         url: `/api/plugins/${pluginJson.id}/resources/readyz`,
       });
       const result = await lastValueFrom(response);
-      setMessage(`Control Server readyz: ${result.data.status}`);
+      setMessage(t('filebeat-k8s-app.settings.readyzMessage', 'Control Server readyz: {{status}}', { status: result.data.status }));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -71,18 +72,31 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
 
   return (
     <form onSubmit={onSubmit}>
-      <FieldSet label="日志采集插件设置">
-        {message && <Alert title="连接正常" severity="success">{message}</Alert>}
-        {error && <Alert title="配置错误" severity="error">{error}</Alert>}
+      <FieldSet label={t('filebeat-k8s-app.settings.title', 'Log collection plugin settings')}>
+        {message && (
+          <Alert title={t('filebeat-k8s-app.common.normal', 'Connection healthy')} severity="success">
+            {message}
+          </Alert>
+        )}
+        {error && (
+          <Alert title={t('filebeat-k8s-app.common.configError', 'Configuration error')} severity="error">
+            {error}
+          </Alert>
+        )}
 
         <div className={s.note}>
-          多云日志路径适配由 control-sidecar 在每个节点自动探测。推荐优先使用 container_stdio；
-          container_file 依赖容器 rootfs 能力，实际可用性请在 Agents 页面查看。
+          <Trans
+            i18nKey="filebeat-k8s-app.settings.note"
+            defaults="Multi-cloud log path adaptation is detected automatically by control-sidecar on each node. Prefer container_stdio; container_file depends on container rootfs capability, and actual availability is shown on the Agents page."
+          />
         </div>
 
         <Field
           label="controlServerUrl"
-          description="Grafana 插件后端访问 filebeat-k8s control-server 的地址。Docker Compose 默认使用 http://control-server:8080。"
+          description={t(
+            'filebeat-k8s-app.settings.controlServerDescription',
+            'The URL used by the Grafana plugin backend to access filebeat-k8s control-server. Docker Compose defaults to http://control-server:8080.'
+          )}
         >
           <Input
             width={72}
@@ -95,7 +109,13 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
           />
         </Field>
 
-        <Field label="adminToken" description="可选。未来 control-server 管理 API 加鉴权后，会以 Authorization: Bearer 转发。">
+        <Field
+          label="adminToken"
+          description={t(
+            'filebeat-k8s-app.settings.adminTokenDescription',
+            'Optional. When control-server management API authentication is added, it will be forwarded as Authorization: Bearer.'
+          )}
+        >
           <SecretInput
             width={72}
             id="config-admin-token"
@@ -111,10 +131,10 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
 
         <div className={s.actions}>
           <Button type="submit" data-testid={testIds.appConfig.submit}>
-            保存设置
+            {t('filebeat-k8s-app.common.saveSettings', 'Save settings')}
           </Button>
           <Button type="button" variant="secondary" onClick={testConnection}>
-            测试连接
+            {t('filebeat-k8s-app.common.testConnection', 'Test connection')}
           </Button>
         </div>
       </FieldSet>

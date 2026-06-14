@@ -1,5 +1,6 @@
 import { lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
+import { t } from '@grafana/i18n';
 import pluginJson from '../plugin.json';
 import { Agent, ClusterOptions, Policy, PolicyRevision, RenderPreviewResponse } from '../types';
 
@@ -25,7 +26,7 @@ function asArray<T>(value: T[] | null | undefined): T[] {
 
 function normalizeError(error: unknown): Error {
   const raw = error as { data?: { error?: string; message?: string; details?: string }; status?: number; message?: string };
-  const message = raw?.data?.error || raw?.data?.message || raw?.message || '请求失败';
+  const message = raw?.data?.error || raw?.data?.message || raw?.message || t('filebeat-k8s-app.errors.requestFailed', 'Request failed');
   const details = raw?.data?.details ? ` ${raw.data.details}` : '';
   return new Error(`${message}${details}`);
 }

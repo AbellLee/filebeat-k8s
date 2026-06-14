@@ -21,8 +21,8 @@ recursive_glob.enabled: true
   });
 
   test('rejects reserved generated input fields', () => {
-    expect(() => inputConfigFromYaml('paths:\n  - /tmp/*.log')).toThrow(/保留字段 paths/);
-    expect(() => inputConfigFromYaml('processors: []')).toThrow(/保留字段 processors/);
+    expect(() => inputConfigFromYaml('paths:\n  - /tmp/*.log')).toThrow(/reserved field paths/);
+    expect(() => inputConfigFromYaml('processors: []')).toThrow(/reserved field processors/);
   });
 
   test('rejects non-object top-level YAML', () => {

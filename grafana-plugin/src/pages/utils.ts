@@ -1,4 +1,5 @@
 import { parse, stringify } from 'yaml';
+import { t } from '@grafana/i18n';
 import { Agent, Policy } from '../types';
 
 export const emptyPolicy = (): Policy => ({
@@ -40,13 +41,13 @@ export function timeAgo(value?: string): string {
   }
   const seconds = Math.max(1, Math.round((Date.now() - date.getTime()) / 1000));
   if (seconds < 60) {
-    return `${seconds}s ago`;
+    return t('filebeat-k8s-app.common.secondsAgo', '{{count}}s ago', { count: seconds });
   }
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) {
-    return `${minutes}m ago`;
+    return t('filebeat-k8s-app.common.minutesAgo', '{{count}}m ago', { count: minutes });
   }
-  return `${Math.round(minutes / 60)}h ago`;
+  return t('filebeat-k8s-app.common.hoursAgo', '{{count}}h ago', { count: Math.round(minutes / 60) });
 }
 
 export function policyScope(policy: Policy): string {
@@ -114,16 +115,20 @@ export function inputConfigFromYaml(value: string): Record<string, unknown> {
   }
   const parsed = parse(trimmed) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('input_config 必须是 YAML object/map');
+    throw new Error(t('filebeat-k8s-app.errors.inputConfigObject', 'input_config must be a YAML object/map'));
   }
   const config = parsed as Record<string, unknown>;
   for (const key of Object.keys(config)) {
     const normalized = key.trim();
     if (!normalized) {
-      throw new Error('input_config 不能包含空 key');
+      throw new Error(t('filebeat-k8s-app.errors.inputConfigEmptyKey', 'input_config cannot contain an empty key'));
     }
     if (reservedInputConfigKeys.has(normalized)) {
-      throw new Error(`input_config 不能覆盖保留字段 ${normalized}`);
+      throw new Error(
+        t('filebeat-k8s-app.errors.inputConfigReserved', 'input_config cannot override reserved field {{field}}', {
+          field: normalized,
+        })
+      );
     }
   }
   return config;

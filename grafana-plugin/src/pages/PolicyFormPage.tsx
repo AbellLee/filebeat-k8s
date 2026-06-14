@@ -2,6 +2,7 @@ import React, { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PluginPage } from '@grafana/runtime';
 import { Alert, Button, Combobox, ComboboxOption, LinkButton, useStyles2 } from '@grafana/ui';
+import { t } from '@grafana/i18n';
 import { api } from '../api/client';
 import { ClusterOptions, LogType, Policy } from '../types';
 import { ROUTES } from '../constants';
@@ -167,26 +168,41 @@ function PolicyFormPage() {
       <div className={s.page}>
         <div className={s.header}>
           <div>
-            <div className={s.eyebrow}>Filebeat Ops / Policies / {isEdit ? '编辑策略' : '创建策略'}</div>
-            <h1 className={s.title}>Policy Create / Edit</h1>
-            <div className={s.subtitle}>使用 Kubernetes options 填充 scope，保存前预览 rendered_config。</div>
+            <div className={s.eyebrow}>
+              Filebeat Ops / Policies /{' '}
+              {isEdit
+                ? t('filebeat-k8s-app.policyForm.editBreadcrumb', 'Edit policy')
+                : t('filebeat-k8s-app.policyForm.createBreadcrumb', 'Create policy')}
+            </div>
+            <h1 className={s.title}>{t('filebeat-k8s-app.policyForm.title', 'Policy Create / Edit')}</h1>
+            <div className={s.subtitle}>
+              {t('filebeat-k8s-app.policyForm.subtitle', 'Use Kubernetes options to fill scope and preview rendered_config before saving.')}
+            </div>
           </div>
           <div className={s.toolbar}>
             <LinkButton variant="secondary" href={prefixRoute(ROUTES.Policies)}>
-              取消
+              {t('filebeat-k8s-app.common.cancel', 'Cancel')}
             </LinkButton>
             <Button icon="save" onClick={onSave}>
-              保存 policy
+              {t('filebeat-k8s-app.common.savePolicy', 'Save policy')}
             </Button>
           </div>
         </div>
 
-        {error && <Alert title="保存失败" severity="error">{error}</Alert>}
-        {options?.degraded && <Alert title="Kubernetes options 降级" severity="warning">{options.message}</Alert>}
+        {error && (
+          <Alert title={t('filebeat-k8s-app.common.saveFailed', 'Save failed')} severity="error">
+            {error}
+          </Alert>
+        )}
+        {options?.degraded && (
+          <Alert title={t('filebeat-k8s-app.policyForm.kubernetesOptionsDegraded', 'Kubernetes options degraded')} severity="warning">
+            {options.message}
+          </Alert>
+        )}
 
         <div className={s.split}>
           <section className={s.card}>
-            <h2>基础信息</h2>
+            <h2>{t('filebeat-k8s-app.policyForm.basicInfo', 'Basic information')}</h2>
             <div className={s.formGrid}>
               <Field label="id" value={policy.id} onChange={(value) => update('id', value)} placeholder="payment-app" disabled={isEdit} />
               <Field label="name" value={policy.name} onChange={(value) => update('name', value)} placeholder="payment app" />
@@ -197,7 +213,11 @@ function PolicyFormPage() {
                 options={namespaceOptions}
                 onChange={(value) => updateScope({ namespace: value, controller_type: '', controller_name: '', container_name: '' })}
                 disabled={isHostFile}
-                placeholder={isHostFile ? 'host_file 不需要 namespace' : '选择 namespace'}
+                placeholder={
+                  isHostFile
+                    ? t('filebeat-k8s-app.policyForm.hostFileNoNamespace', 'host_file does not need namespace')
+                    : t('filebeat-k8s-app.policyForm.selectNamespace', 'Select namespace')
+                }
               />
               <SelectField
                 label="controller_type"
@@ -205,7 +225,11 @@ function PolicyFormPage() {
                 options={availableControllerTypes}
                 onChange={(value) => updateScope({ controller_type: value, controller_name: '', container_name: '' })}
                 disabled={isHostFile || !selectedNamespace}
-                placeholder={!selectedNamespace ? '先选择 namespace' : '选择 controller_type'}
+                placeholder={
+                  !selectedNamespace
+                    ? t('filebeat-k8s-app.policyForm.chooseNamespaceFirst', 'Choose namespace first')
+                    : t('filebeat-k8s-app.policyForm.selectControllerType', 'Select controller_type')
+                }
               />
               <SelectField
                 label="controller_name"
@@ -213,7 +237,13 @@ function PolicyFormPage() {
                 options={controllerNameOptions}
                 onChange={(value) => updateScope({ controller_name: value, container_name: '' })}
                 disabled={isHostFile || !selectedNamespace || !selectedControllerType}
-                placeholder={!selectedNamespace ? '先选择 namespace' : !selectedControllerType ? '先选择 controller_type' : '选择 controller_name'}
+                placeholder={
+                  !selectedNamespace
+                    ? t('filebeat-k8s-app.policyForm.chooseNamespaceFirst', 'Choose namespace first')
+                    : !selectedControllerType
+                      ? t('filebeat-k8s-app.policyForm.chooseControllerTypeFirst', 'Choose controller_type first')
+                      : t('filebeat-k8s-app.policyForm.selectControllerName', 'Select controller_name')
+                }
               />
               <SelectField
                 label="container_name"
@@ -221,14 +251,18 @@ function PolicyFormPage() {
                 options={containerNameOptions}
                 onChange={(value) => update('container_name', value)}
                 disabled={isHostFile || !selectedControllerName}
-                placeholder={!selectedControllerName ? '先选择 controller_name' : '选择 container_name'}
+                placeholder={
+                  !selectedControllerName
+                    ? t('filebeat-k8s-app.policyForm.chooseControllerNameFirst', 'Choose controller_name first')
+                    : t('filebeat-k8s-app.policyForm.selectContainerName', 'Select container_name')
+                }
               />
               <SelectField
                 label="log_type"
                 value={policy.log_type}
                 options={logTypeOptions}
                 onChange={updateLogType}
-                placeholder="选择 log_type"
+                placeholder={t('filebeat-k8s-app.policyForm.selectLogType', 'Select log_type')}
               />
               <Field label="priority" value={String(policy.priority)} onChange={(value) => update('priority', Number(value) || 0)} />
               <div className={s.field}>
@@ -240,13 +274,24 @@ function PolicyFormPage() {
               </div>
             </div>
 
-            <h2>高级匹配</h2>
+            <h2>{t('filebeat-k8s-app.policyForm.advancedMatch', 'Advanced matching')}</h2>
             <div className={s.formGrid}>
               <Field label="node_selector" value={policy.node_selector || ''} onChange={(value) => update('node_selector', value)} placeholder="nodepool=online,zone=hk" />
-              <Field label="log_path" value={policy.log_path || ''} onChange={(value) => update('log_path', value)} placeholder="/app/logs/*.log 或 /var/log/messages" />
+              <Field
+                label="log_path"
+                value={policy.log_path || ''}
+                onChange={(value) => update('log_path', value)}
+                placeholder={t('filebeat-k8s-app.policyForm.logPathPlaceholder', '/app/logs/*.log or /var/log/messages')}
+              />
               <div className={`${s.field} ${s.fullSpan}`}>
                 <label>custom_fields</label>
-                <textarea className={s.input} rows={5} value={customFields} onChange={(event) => setCustomFields(event.target.value)} placeholder={'__project__=cloudnet\n__logstore__=payment'} />
+                <textarea
+                  className={s.input}
+                  rows={5}
+                  value={customFields}
+                  onChange={(event) => setCustomFields(event.target.value)}
+                  placeholder={'__project__=cloudnet\n__logstore__=payment'}
+                />
               </div>
               <div className={`${s.field} ${s.fullSpan}`}>
                 <label>input_config</label>
@@ -265,13 +310,17 @@ function PolicyFormPage() {
           <section className={s.card}>
             <div className={s.header}>
               <div>
-                <h2>YAML 预览</h2>
-                <div className={`${s.muted} ${s.mono}`}>{renderedChecksum || 'rendered_checksum 待生成'}</div>
+                <h2>{t('filebeat-k8s-app.policyForm.yamlPreview', 'YAML preview')}</h2>
+                <div className={`${s.muted} ${s.mono}`}>
+                  {renderedChecksum || t('filebeat-k8s-app.policyForm.checksumPending', 'rendered_checksum pending')}
+                </div>
               </div>
               <span className={`${s.chip} ${s.chipBlue}`}>render-preview</span>
             </div>
             {previewError && <div className={s.error}>{previewError}</div>}
-            <pre className={s.code}>{renderedConfig || '填写有效策略后自动生成 rendered_config。'}</pre>
+            <pre className={s.code}>
+              {renderedConfig || t('filebeat-k8s-app.policyForm.renderedConfigPending', 'Fill a valid policy to generate rendered_config automatically.')}
+            </pre>
           </section>
         </div>
       </div>
@@ -292,7 +341,13 @@ function Field({ label, value, onChange, placeholder, disabled }: FieldProps) {
   return (
     <div className={s.field}>
       <label>{label}</label>
-      <input className={s.input} value={value} placeholder={placeholder} disabled={disabled} onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)} />
+      <input
+        className={s.input}
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
+      />
     </div>
   );
 }

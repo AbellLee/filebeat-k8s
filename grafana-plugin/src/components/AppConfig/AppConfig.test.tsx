@@ -30,9 +30,9 @@ describe('Components/AppConfig', () => {
     // @ts-ignore - We don't need to provide `addConfigPage()` and `setChannelSupport()` for these tests
     render(<AppConfig plugin={plugin} query={props.query} />);
 
-    expect(screen.queryByRole('group', { name: /日志采集插件设置/i })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /Log collection plugin settings/i })).toBeInTheDocument();
     expect(screen.queryByTestId(testIds.appConfig.adminToken)).toBeInTheDocument();
     expect(screen.queryByTestId(testIds.appConfig.controlServerUrl)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /保存设置/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Save settings/i })).toBeInTheDocument();
   });
 });

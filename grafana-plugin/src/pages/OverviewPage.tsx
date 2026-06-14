@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PluginPage } from '@grafana/runtime';
 import { Alert, Button, LinkButton, useStyles2 } from '@grafana/ui';
+import { t } from '@grafana/i18n';
 import { api } from '../api/client';
 import { Agent, Policy } from '../types';
 import { ROUTES } from '../constants';
@@ -28,6 +29,8 @@ function OverviewPage() {
   const healthyAgents = agents.filter(agentHealthy);
   const failedAgents = agents.filter((agent) => agent.last_apply_status && agent.last_apply_status !== 'success');
   const recentPolicies = useMemo(() => policies.slice(0, 5), [policies]);
+  const enabledPercent = policies.length ? Math.round((enabledPolicies.length / policies.length) * 100) : 0;
+  const latestHeartbeat = agents[0] ? `${agents[0].id} ${timeAgo(agents[0].last_heartbeat_at)}` : '-';
 
   return (
     <PluginPage>
@@ -35,31 +38,54 @@ function OverviewPage() {
         <div className={s.header}>
           <div>
             <div className={s.eyebrow}>Filebeat Ops / Overview</div>
-            <h1 className={s.title}>日志采集总览</h1>
-            <div className={s.subtitle}>查看策略覆盖、Agent 健康和最近 apply 结果。</div>
+            <h1 className={s.title}>{t('filebeat-k8s-app.overview.title', 'Log collection overview')}</h1>
+            <div className={s.subtitle}>
+              {t('filebeat-k8s-app.overview.subtitle', 'Review policy coverage, agent health, and recent apply results.')}
+            </div>
           </div>
           <div className={s.toolbar}>
             <LinkButton icon="plus" href={prefixRoute(ROUTES.PolicyNew)}>
-              新建策略
+              {t('filebeat-k8s-app.overview.newPolicy', 'New policy')}
             </LinkButton>
             <LinkButton variant="secondary" href={prefixRoute(ROUTES.Agents)}>
-              查看 Agents
+              {t('filebeat-k8s-app.overview.viewAgents', 'View Agents')}
             </LinkButton>
           </div>
         </div>
 
-        {error && <Alert title="加载失败" severity="error">{error}</Alert>}
+        {error && (
+          <Alert title={t('filebeat-k8s-app.common.loadFailed', 'Load failed')} severity="error">
+            {error}
+          </Alert>
+        )}
 
         <div className={s.grid4}>
-          <Metric label="策略总数 policies" value={policies.length} hint="当前 control-server 策略" />
-          <Metric label="启用策略 enabled" value={enabledPolicies.length} hint={`${policies.length ? Math.round((enabledPolicies.length / policies.length) * 100) : 0}% 生效中`} />
-          <Metric label="Agent 健康" value={`${healthyAgents.length}/${agents.length}`} hint="5 分钟内 heartbeat" />
-          <Metric label="最近 apply 失败" value={failedAgents.length} hint="需要排查" danger={failedAgents.length > 0} />
+          <Metric
+            label={t('filebeat-k8s-app.overview.policiesTotal', 'Total policies')}
+            value={policies.length}
+            hint={t('filebeat-k8s-app.overview.policiesTotalHint', 'Policies currently stored in control-server')}
+          />
+          <Metric
+            label={t('filebeat-k8s-app.overview.enabledPolicies', 'Enabled policies')}
+            value={enabledPolicies.length}
+            hint={t('filebeat-k8s-app.overview.enabledPoliciesHint', '{{percent}}% active', { percent: enabledPercent })}
+          />
+          <Metric
+            label={t('filebeat-k8s-app.overview.agentHealth', 'Agent health')}
+            value={`${healthyAgents.length}/${agents.length}`}
+            hint={t('filebeat-k8s-app.overview.agentHealthHint', 'Heartbeat within 5 minutes')}
+          />
+          <Metric
+            label={t('filebeat-k8s-app.overview.recentApplyFailures', 'Recent apply failures')}
+            value={failedAgents.length}
+            hint={t('filebeat-k8s-app.overview.recentApplyFailuresHint', 'Needs investigation')}
+            danger={failedAgents.length > 0}
+          />
         </div>
 
         <div className={s.grid2}>
           <section className={s.card}>
-            <h2>最近策略</h2>
+            <h2>{t('filebeat-k8s-app.overview.recentPolicies', 'Recent policies')}</h2>
             <table className={s.table}>
               <thead>
                 <tr>
@@ -78,7 +104,9 @@ function OverviewPage() {
                       <div className={s.muted}>{policy.id}</div>
                     </td>
                     <td className={s.mono}>{policyScope(policy)}</td>
-                    <td><span className={`${s.chip} ${s.chipBlue}`}>{policy.log_type}</span></td>
+                    <td>
+                      <span className={`${s.chip} ${s.chipBlue}`}>{policy.log_type}</span>
+                    </td>
                     <td>{policy.current_revision}</td>
                     <td className={s.mono}>{shortChecksum(policy.rendered_checksum)}</td>
                   </tr>
@@ -88,7 +116,7 @@ function OverviewPage() {
           </section>
 
           <section className={s.card}>
-            <h2>最近 apply 失败</h2>
+            <h2>{t('filebeat-k8s-app.overview.recentApplyFailures', 'Recent apply failures')}</h2>
             <table className={s.table}>
               <thead>
                 <tr>
@@ -103,13 +131,17 @@ function OverviewPage() {
                   <tr key={agent.id}>
                     <td className={s.mono}>{agent.id}</td>
                     <td className={s.mono}>{shortChecksum(agent.last_apply_checksum)}</td>
-                    <td><span className={`${s.chip} ${s.chipRed}`}>{agent.last_apply_status}</span></td>
+                    <td>
+                      <span className={`${s.chip} ${s.chipRed}`}>{agent.last_apply_status}</span>
+                    </td>
                     <td>{agent.last_apply_message || '-'}</td>
                   </tr>
                 ))}
                 {failedAgents.length === 0 && (
                   <tr>
-                    <td colSpan={4} className={s.muted}>暂无失败 apply 结果。</td>
+                    <td colSpan={4} className={s.muted}>
+                      {t('filebeat-k8s-app.overview.noApplyFailures', 'No failed apply results.')}
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -118,24 +150,26 @@ function OverviewPage() {
         </div>
 
         <section className={s.card}>
-          <h2>关键闭环</h2>
+          <h2>{t('filebeat-k8s-app.overview.keyFlow', 'Key workflow')}</h2>
           <div className={s.toolbar}>
-            <span className={`${s.chip} ${s.chipBlue}`}>创建策略</span>
-            <span>→</span>
-            <span className={`${s.chip} ${s.chipBlue}`}>预览 YAML</span>
-            <span>→</span>
-            <span className={`${s.chip} ${s.chipBlue}`}>保存</span>
-            <span>→</span>
-            <span className={`${s.chip} ${s.chipBlue}`}>查看 revision</span>
-            <span>→</span>
-            <span className={`${s.chip} ${s.chipBlue}`}>回滚</span>
-            <span>→</span>
-            <span className={`${s.chip} ${s.chipBlue}`}>检查 Agent apply</span>
+            <span className={`${s.chip} ${s.chipBlue}`}>{t('filebeat-k8s-app.overview.createPolicy', 'Create policy')}</span>
+            <span>-&gt;</span>
+            <span className={`${s.chip} ${s.chipBlue}`}>{t('filebeat-k8s-app.overview.previewYaml', 'Preview YAML')}</span>
+            <span>-&gt;</span>
+            <span className={`${s.chip} ${s.chipBlue}`}>{t('filebeat-k8s-app.overview.save', 'Save')}</span>
+            <span>-&gt;</span>
+            <span className={`${s.chip} ${s.chipBlue}`}>{t('filebeat-k8s-app.overview.viewRevision', 'View revision')}</span>
+            <span>-&gt;</span>
+            <span className={`${s.chip} ${s.chipBlue}`}>{t('filebeat-k8s-app.common.rollback', 'rollback')}</span>
+            <span>-&gt;</span>
+            <span className={`${s.chip} ${s.chipBlue}`}>{t('filebeat-k8s-app.overview.checkAgentApply', 'Check Agent apply')}</span>
             <Button variant="secondary" onClick={() => window.location.assign(prefixRoute(ROUTES.PolicyNew))}>
-              开始
+              {t('filebeat-k8s-app.overview.start', 'Start')}
             </Button>
           </div>
-          <div className={s.subtitle}>最近 heartbeat：{agents[0] ? `${agents[0].id} ${timeAgo(agents[0].last_heartbeat_at)}` : '-'}</div>
+          <div className={s.subtitle}>
+            {t('filebeat-k8s-app.overview.recentHeartbeat', 'Latest heartbeat: {{value}}', { value: latestHeartbeat })}
+          </div>
         </section>
       </div>
     </PluginPage>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PluginPage } from '@grafana/runtime';
 import { Alert, Button, useStyles2 } from '@grafana/ui';
+import { t } from '@grafana/i18n';
 import { api } from '../api/client';
 import { Agent, CapabilityDetail } from '../types';
 import { agentHealthy, shortChecksum, timeAgo } from './utils';
@@ -35,21 +36,31 @@ function AgentsPage() {
         <div className={s.header}>
           <div>
             <div className={s.eyebrow}>Filebeat Ops / Agents</div>
-            <h1 className={s.title}>Agent 状态</h1>
-            <div className={s.subtitle}>查看 sidecar heartbeat、apply-result 和节点日志采集能力。</div>
+            <h1 className={s.title}>{t('filebeat-k8s-app.agents.title', 'Agent status')}</h1>
+            <div className={s.subtitle}>
+              {t('filebeat-k8s-app.agents.subtitle', 'Review sidecar heartbeat, apply-result, and node log collection capability.')}
+            </div>
           </div>
           <div className={s.toolbar}>
             <select className={s.input} value={cluster} onChange={(event) => setCluster(event.target.value)}>
-              <option value="">cluster: all</option>
-              {clusters.map((item) => <option key={item} value={item}>{item}</option>)}
+              <option value="">{t('filebeat-k8s-app.agents.clusterAll', 'cluster: all')}</option>
+              {clusters.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
             <Button variant="secondary" icon="sync" onClick={loadAgents}>
-              刷新
+              {t('filebeat-k8s-app.common.refresh', 'Refresh')}
             </Button>
           </div>
         </div>
 
-        {error && <Alert title="加载失败" severity="error">{error}</Alert>}
+        {error && (
+          <Alert title={t('filebeat-k8s-app.common.loadFailed', 'Load failed')} severity="error">
+            {error}
+          </Alert>
+        )}
 
         <div className={s.split}>
           <section className={s.card}>
@@ -78,8 +89,12 @@ function AgentsPage() {
                     </td>
                     <td className={s.mono}>{agent.capabilities?.profile || 'unknown'}</td>
                     <td className={s.mono}>{agent.capabilities?.runtime || 'unknown'}</td>
-                    <td><CapabilityChip detail={agent.capabilities?.stdio} /></td>
-                    <td><CapabilityChip detail={agent.capabilities?.container_file} /></td>
+                    <td>
+                      <CapabilityChip detail={agent.capabilities?.stdio} />
+                    </td>
+                    <td>
+                      <CapabilityChip detail={agent.capabilities?.container_file} />
+                    </td>
                     <td>
                       <span className={`${s.chip} ${agent.last_apply_status === 'success' ? s.chipGreen : s.chipRed}`}>
                         {agent.last_apply_status || '-'}
@@ -89,7 +104,9 @@ function AgentsPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className={s.muted}>暂无 Agent。</td>
+                    <td colSpan={8} className={s.muted}>
+                      {t('filebeat-k8s-app.agents.noAgents', 'No Agents.')}
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -99,29 +116,35 @@ function AgentsPage() {
           <aside className={s.drawer}>
             {selected ? (
               <>
-                <h2>Agent detail</h2>
+                <h2>{t('filebeat-k8s-app.agents.detailTitle', 'Agent detail')}</h2>
                 <Summary label="agent_id" value={selected.id} />
                 <Summary label="cluster_id" value={selected.cluster_id} />
                 <Summary label="node_name" value={selected.node_name} />
-                <Summary label="current checksum" value={shortChecksum(selected.current_config_checksum)} />
-                <h3>采集能力</h3>
+                <Summary label={t('filebeat-k8s-app.agents.currentChecksum', 'current checksum')} value={shortChecksum(selected.current_config_checksum)} />
+                <h3>{t('filebeat-k8s-app.agents.capabilities', 'Collection capability')}</h3>
                 <CapabilityDetailBlock name="stdio" detail={selected.capabilities?.stdio} />
                 <CapabilityDetailBlock name="container_file" detail={selected.capabilities?.container_file} />
                 <h3>node labels</h3>
                 <pre className={s.code} style={{ minHeight: 120, maxHeight: 220 }}>
                   {Object.entries(selected.node_labels ?? {})
                     .map(([key, value]) => `${key}=${value}`)
-                    .join('\n') || '暂无 node_labels'}
+                    .join('\n') || t('filebeat-k8s-app.agents.noNodeLabels', 'No node_labels')}
                 </pre>
-                <h3>最近 apply</h3>
+                <h3>{t('filebeat-k8s-app.agents.recentApply', 'Recent apply')}</h3>
                 <div className={s.message}>
-                  <div><strong>status:</strong> {selected.last_apply_status || '-'}</div>
-                  <div><strong>checksum:</strong> <span className={s.mono}>{selected.last_apply_checksum || '-'}</span></div>
-                  <div><strong>message:</strong> {selected.last_apply_message || '-'}</div>
+                  <div>
+                    <strong>status:</strong> {selected.last_apply_status || '-'}
+                  </div>
+                  <div>
+                    <strong>checksum:</strong> <span className={s.mono}>{selected.last_apply_checksum || '-'}</span>
+                  </div>
+                  <div>
+                    <strong>message:</strong> {selected.last_apply_message || '-'}
+                  </div>
                 </div>
               </>
             ) : (
-              <div className={s.muted}>选择一个 Agent 查看详情。</div>
+              <div className={s.muted}>{t('filebeat-k8s-app.agents.selectAgent', 'Select an Agent to view details.')}</div>
             )}
           </aside>
         </div>
@@ -141,9 +164,15 @@ function CapabilityDetailBlock({ name, detail }: { name: string; detail?: Capabi
   const status = detail?.status || 'unknown';
   return (
     <div className={s.message} style={{ marginBottom: 12 }}>
-      <div><strong>{name}:</strong> <span className={`${s.chip} ${capabilityClass(s, status)}`}>{status}</span></div>
-      <div><strong>detected_path:</strong> <span className={s.mono}>{detail?.detected_path || '-'}</span></div>
-      <div><strong>reason:</strong> {detail?.reason || '-'}</div>
+      <div>
+        <strong>{name}:</strong> <span className={`${s.chip} ${capabilityClass(s, status)}`}>{status}</span>
+      </div>
+      <div>
+        <strong>detected_path:</strong> <span className={s.mono}>{detail?.detected_path || '-'}</span>
+      </div>
+      <div>
+        <strong>reason:</strong> {detail?.reason || '-'}
+      </div>
     </div>
   );
 }

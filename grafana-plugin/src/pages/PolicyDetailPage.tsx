@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PluginPage } from '@grafana/runtime';
 import { Alert, Button, LinkButton, Modal, useStyles2 } from '@grafana/ui';
+import { t } from '@grafana/i18n';
 import { api } from '../api/client';
 import { Agent, Policy, PolicyRevision } from '../types';
 import { ROUTES } from '../constants';
@@ -59,7 +60,13 @@ function PolicyDetailPage() {
   if (!policy) {
     return (
       <PluginPage>
-        {error ? <Alert title="加载失败" severity="error">{error}</Alert> : <div className={s.muted}>加载 policy...</div>}
+        {error ? (
+          <Alert title={t('filebeat-k8s-app.common.loadFailed', 'Load failed')} severity="error">
+            {error}
+          </Alert>
+        ) : (
+          <div className={s.muted}>{t('filebeat-k8s-app.common.loadingPolicy', 'Loading policy...')}</div>
+        )}
       </PluginPage>
     );
   }
@@ -70,23 +77,39 @@ function PolicyDetailPage() {
         <div className={s.header}>
           <div>
             <div className={s.eyebrow}>Filebeat Ops / Policies / {policy.id}</div>
-            <h1 className={s.title}>Policy Detail</h1>
-            <div className={s.subtitle}>查看当前 spec、rendered_config 和 revision 历史，支持回滚。</div>
+            <h1 className={s.title}>{t('filebeat-k8s-app.policyDetail.title', 'Policy detail')}</h1>
+            <div className={s.subtitle}>
+              {t('filebeat-k8s-app.policyDetail.subtitle', 'Review the current spec, rendered_config, and revision history, with rollback support.')}
+            </div>
           </div>
           <div className={s.toolbar}>
             <LinkButton variant="secondary" href={prefixRoute(ROUTES.Policies)}>
-              返回列表
+              {t('filebeat-k8s-app.common.backToList', 'Back to list')}
             </LinkButton>
             <LinkButton icon="edit" href={prefixRoute(`policies/${encodeURIComponent(policy.id)}/edit`)}>
-              编辑
+              {t('filebeat-k8s-app.common.edit', 'Edit')}
             </LinkButton>
           </div>
         </div>
 
-        {error && <Alert title="操作失败" severity="error">{error}</Alert>}
+        {error && (
+          <Alert title={t('filebeat-k8s-app.common.operationFailed', 'Operation failed')} severity="error">
+            {error}
+          </Alert>
+        )}
         {containerFileSummary && containerFileSummary.matching.length > 0 && containerFileSummary.unsupported.length > 0 && (
-          <Alert title="container_file 节点能力不足" severity="warning">
-            {containerFileSummary.unsupported.length}/{containerFileSummary.matching.length} 个匹配 Agent 当前不支持容器内文件采集，请在 Agents 页面查看原因。
+          <Alert
+            title={t('filebeat-k8s-app.policyDetail.containerFileCapabilityWarning', 'container_file node capability is insufficient')}
+            severity="warning"
+          >
+            {t(
+              'filebeat-k8s-app.policyDetail.containerFileCapabilityMessage',
+              '{{unsupported}}/{{total}} matching Agents do not currently support in-container file collection. Check the Agents page for reasons.',
+              {
+                unsupported: containerFileSummary.unsupported.length,
+                total: containerFileSummary.matching.length,
+              }
+            )}
           </Alert>
         )}
 
@@ -100,11 +123,11 @@ function PolicyDetailPage() {
         <div className={s.grid2}>
           <section className={s.card}>
             <h2>rendered_config</h2>
-            <pre className={s.code}>{policy.rendered_config || '当前 policy 尚无 rendered_config。'}</pre>
+            <pre className={s.code}>{policy.rendered_config || t('filebeat-k8s-app.policyDetail.noRenderedConfig', 'This policy has no rendered_config yet.')}</pre>
           </section>
 
           <section className={s.card}>
-            <h2>Revision history</h2>
+            <h2>{t('filebeat-k8s-app.policyDetail.revisionHistory', 'Revision history')}</h2>
             <table className={s.table}>
               <thead>
                 <tr>
@@ -124,10 +147,10 @@ function PolicyDetailPage() {
                     <td>{formatDate(revision.created_at)}</td>
                     <td>
                       {revision.revision === policy.current_revision ? (
-                        <span className={`${s.chip} ${s.chipGreen}`}>current</span>
+                        <span className={`${s.chip} ${s.chipGreen}`}>{t('filebeat-k8s-app.common.current', 'current')}</span>
                       ) : (
                         <Button size="sm" variant="secondary" onClick={() => setRollbackTarget(revision)}>
-                          rollback
+                          {t('filebeat-k8s-app.common.rollback', 'rollback')}
                         </Button>
                       )}
                     </td>
@@ -135,25 +158,39 @@ function PolicyDetailPage() {
                 ))}
               </tbody>
             </table>
-            <div className={s.message}>POST /api/v1/policies/:id/rollback 会生成新的 revision，并让 Agent 在下次拉取时看到新 checksum。</div>
+            <div className={s.message}>
+              {t(
+                'filebeat-k8s-app.policyDetail.rollbackInfo',
+                'POST /api/v1/policies/:id/rollback creates a new revision and lets Agents see the new checksum on their next pull.'
+              )}
+            </div>
           </section>
         </div>
       </div>
 
       {rollbackTarget && (
-        <Modal title={`确认回滚 revision ${rollbackTarget.revision}？`} isOpen={Boolean(rollbackTarget)} onDismiss={() => setRollbackTarget(undefined)}>
-          <p>系统会复制目标 revision 的 rendered_config 为新的 revision。</p>
+        <Modal
+          title={t('filebeat-k8s-app.policyDetail.confirmRollbackTitle', 'Confirm rollback to revision {{revision}}?', {
+            revision: rollbackTarget.revision,
+          })}
+          isOpen={Boolean(rollbackTarget)}
+          onDismiss={() => setRollbackTarget(undefined)}
+        >
+          <p>
+            {t(
+              'filebeat-k8s-app.policyDetail.confirmRollbackBody',
+              'The system will copy the target revision rendered_config into a new revision.'
+            )}
+          </p>
           <div className={s.card}>
             <div className={s.muted}>target checksum</div>
             <strong className={s.mono}>{rollbackTarget.checksum}</strong>
           </div>
           <div className={s.toolbar} style={{ justifyContent: 'flex-end', marginTop: 16 }}>
             <Button variant="secondary" onClick={() => setRollbackTarget(undefined)}>
-              取消
+              {t('filebeat-k8s-app.common.cancel', 'Cancel')}
             </Button>
-            <Button onClick={rollback}>
-              确认回滚
-            </Button>
+            <Button onClick={rollback}>{t('filebeat-k8s-app.policyDetail.confirmRollback', 'Confirm rollback')}</Button>
           </div>
         </Modal>
       )}
@@ -166,7 +203,9 @@ function Summary({ label, value }: { label: string; value: string }) {
   return (
     <section className={s.card}>
       <div className={s.metricLabel}>{label}</div>
-      <div className={`${s.metricValue} ${s.mono}`} style={{ fontSize: 15 }}>{value || '-'}</div>
+      <div className={`${s.metricValue} ${s.mono}`} style={{ fontSize: 15 }}>
+        {value || '-'}
+      </div>
     </section>
   );
 }
