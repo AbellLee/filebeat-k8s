@@ -130,12 +130,38 @@ export const getPageStyles = (theme: GrafanaTheme2) => ({
     grid-column: 1 / -1;
   `,
   field: css`
-    label {
-      display: block;
-      color: ${theme.colors.text.secondary};
-      font-size: ${theme.typography.bodySmall.fontSize};
-      margin-bottom: ${theme.spacing(0.75)};
+    min-width: 0;
+  `,
+  fieldLabel: css`
+    display: inline-flex;
+    align-items: center;
+    gap: ${theme.spacing(0.5)};
+    margin-bottom: ${theme.spacing(0.75)};
+    color: ${theme.colors.text.secondary};
+    font-size: ${theme.typography.bodySmall.fontSize};
+    min-height: 18px;
+  `,
+  helpIcon: css`
+    color: ${theme.colors.text.secondary};
+    opacity: 0.85;
+
+    &:hover,
+    &:focus-visible {
+      color: ${theme.colors.text.primary};
+      opacity: 1;
     }
+  `,
+  helpPopover: css`
+    max-width: 340px;
+    padding: ${theme.spacing(1.5)};
+    color: ${theme.colors.text.primary};
+    background: ${theme.colors.background.elevated};
+    border: 1px solid ${theme.colors.border.weak};
+    border-radius: ${theme.shape.radius.default};
+    box-shadow: ${theme.shadows.z3};
+    font-size: ${theme.typography.bodySmall.fontSize};
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   `,
   input: css`
     width: 100%;

@@ -67,14 +67,14 @@ function AgentsPage() {
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th>agent_id</th>
-                  <th>node_name</th>
-                  <th>heartbeat</th>
-                  <th>profile</th>
-                  <th>runtime</th>
-                  <th>stdio</th>
-                  <th>container_file</th>
-                  <th>last_apply_status</th>
+                  <th>{t('filebeat-k8s-app.fields.agentId', 'Agent ID')}</th>
+                  <th>{t('filebeat-k8s-app.fields.nodeName', 'Node name')}</th>
+                  <th>{t('filebeat-k8s-app.fields.heartbeat', 'Heartbeat')}</th>
+                  <th>{t('filebeat-k8s-app.fields.profile', 'Profile')}</th>
+                  <th>{t('filebeat-k8s-app.fields.runtime', 'Runtime')}</th>
+                  <th>{t('filebeat-k8s-app.fields.stdio', 'stdio')}</th>
+                  <th>{t('filebeat-k8s-app.fields.containerFile', 'container_file')}</th>
+                  <th>{t('filebeat-k8s-app.fields.lastApplyStatus', 'Last apply status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -117,14 +117,14 @@ function AgentsPage() {
             {selected ? (
               <>
                 <h2>{t('filebeat-k8s-app.agents.detailTitle', 'Agent detail')}</h2>
-                <Summary label="agent_id" value={selected.id} />
-                <Summary label="cluster_id" value={selected.cluster_id} />
-                <Summary label="node_name" value={selected.node_name} />
-                <Summary label={t('filebeat-k8s-app.agents.currentChecksum', 'current checksum')} value={shortChecksum(selected.current_config_checksum)} />
+                <Summary label={t('filebeat-k8s-app.fields.agentId', 'Agent ID')} value={selected.id} />
+                <Summary label={t('filebeat-k8s-app.fields.clusterId', 'Cluster ID')} value={selected.cluster_id} />
+                <Summary label={t('filebeat-k8s-app.fields.nodeName', 'Node name')} value={selected.node_name} />
+                <Summary label={t('filebeat-k8s-app.fields.currentChecksum', 'Current checksum')} value={shortChecksum(selected.current_config_checksum)} />
                 <h3>{t('filebeat-k8s-app.agents.capabilities', 'Collection capability')}</h3>
-                <CapabilityDetailBlock name="stdio" detail={selected.capabilities?.stdio} />
-                <CapabilityDetailBlock name="container_file" detail={selected.capabilities?.container_file} />
-                <h3>node labels</h3>
+                <CapabilityDetailBlock name={t('filebeat-k8s-app.fields.stdio', 'stdio')} detail={selected.capabilities?.stdio} />
+                <CapabilityDetailBlock name={t('filebeat-k8s-app.fields.containerFile', 'container_file')} detail={selected.capabilities?.container_file} />
+                <h3>{t('filebeat-k8s-app.fields.nodeLabels', 'Node labels')}</h3>
                 <pre className={s.code} style={{ minHeight: 120, maxHeight: 220 }}>
                   {Object.entries(selected.node_labels ?? {})
                     .map(([key, value]) => `${key}=${value}`)
@@ -133,13 +133,14 @@ function AgentsPage() {
                 <h3>{t('filebeat-k8s-app.agents.recentApply', 'Recent apply')}</h3>
                 <div className={s.message}>
                   <div>
-                    <strong>status:</strong> {selected.last_apply_status || '-'}
+                    <strong>{t('filebeat-k8s-app.fields.status', 'Status')}:</strong> {selected.last_apply_status || '-'}
                   </div>
                   <div>
-                    <strong>checksum:</strong> <span className={s.mono}>{selected.last_apply_checksum || '-'}</span>
+                    <strong>{t('filebeat-k8s-app.fields.checksum', 'Checksum')}:</strong>{' '}
+                    <span className={s.mono}>{selected.last_apply_checksum || '-'}</span>
                   </div>
                   <div>
-                    <strong>message:</strong> {selected.last_apply_message || '-'}
+                    <strong>{t('filebeat-k8s-app.fields.message', 'Message')}:</strong> {selected.last_apply_message || '-'}
                   </div>
                 </div>
               </>
@@ -168,10 +169,11 @@ function CapabilityDetailBlock({ name, detail }: { name: string; detail?: Capabi
         <strong>{name}:</strong> <span className={`${s.chip} ${capabilityClass(s, status)}`}>{status}</span>
       </div>
       <div>
-        <strong>detected_path:</strong> <span className={s.mono}>{detail?.detected_path || '-'}</span>
+        <strong>{t('filebeat-k8s-app.fields.detectedPath', 'Detected path')}:</strong>{' '}
+        <span className={s.mono}>{detail?.detected_path || '-'}</span>
       </div>
       <div>
-        <strong>reason:</strong> {detail?.reason || '-'}
+        <strong>{t('filebeat-k8s-app.fields.reason', 'Reason')}:</strong> {detail?.reason || '-'}
       </div>
     </div>
   );

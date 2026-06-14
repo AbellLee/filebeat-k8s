@@ -1,7 +1,7 @@
 import React, { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PluginPage } from '@grafana/runtime';
-import { Alert, Button, Combobox, ComboboxOption, LinkButton, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Combobox, ComboboxOption, IconButton, LinkButton, Popover, useStyles2 } from '@grafana/ui';
 import { t } from '@grafana/i18n';
 import { api } from '../api/client';
 import { ClusterOptions, LogType, Policy } from '../types';
@@ -36,6 +36,11 @@ function PolicyFormPage() {
   }, [inputConfig]);
 
   const isHostFile = policy.log_type === 'host_file';
+  const isFileLogType = policy.log_type === 'container_file' || policy.log_type === 'host_file';
+  const logPathHint =
+    policy.log_type === 'host_file'
+      ? t('filebeat-k8s-app.policyForm.hints.hostLogPath', 'Absolute path on the node, for example /var/log/messages.')
+      : t('filebeat-k8s-app.policyForm.hints.containerLogPath', 'Path inside the container, for example /app/logs/*.log.');
   const selectedNamespace = policy.namespace || '';
   const selectedControllerType = policy.controller_type || '';
   const selectedControllerName = policy.controller_name || '';
@@ -108,7 +113,11 @@ function PolicyFormPage() {
     if (parsedInputConfig.error) {
       return;
     }
-    const next = { ...policy, custom_fields: customFieldsFromText(customFields), input_config: parsedInputConfig.config };
+    const next = {
+      ...normalizePolicyForLogType(policy),
+      custom_fields: customFieldsFromText(customFields),
+      input_config: parsedInputConfig.config,
+    };
     const timer = window.setTimeout(() => {
       if (!next.name || !next.cluster_id) {
         return;
@@ -144,6 +153,14 @@ function PolicyFormPage() {
       });
       return;
     }
+    if (value === 'container_stdio') {
+      updateScope({
+        log_type: value,
+        log_path: '',
+        controller_type: policy.controller_type || '',
+      });
+      return;
+    }
     updateScope({
       log_type: value,
       controller_type: policy.controller_type || '',
@@ -154,7 +171,11 @@ function PolicyFormPage() {
     if (parsedInputConfig.error) {
       return;
     }
-    const payload = { ...policy, custom_fields: customFieldsFromText(customFields), input_config: parsedInputConfig.config };
+    const payload = {
+      ...normalizePolicyForLogType(policy),
+      custom_fields: customFieldsFromText(customFields),
+      input_config: parsedInputConfig.config,
+    };
     try {
       const saved = isEdit && id ? await api.updatePolicy(id, payload) : await api.createPolicy(payload);
       navigate(prefixRoute(`policies/${encodeURIComponent(saved.id)}`));
@@ -204,15 +225,35 @@ function PolicyFormPage() {
           <section className={s.card}>
             <h2>{t('filebeat-k8s-app.policyForm.basicInfo', 'Basic information')}</h2>
             <div className={s.formGrid}>
-              <Field label="id" value={policy.id} onChange={(value) => update('id', value)} placeholder="payment-app" disabled={isEdit} />
-              <Field label="name" value={policy.name} onChange={(value) => update('name', value)} placeholder="payment app" />
-              <Field label="cluster_id" value={policy.cluster_id} onChange={(value) => update('cluster_id', value)} placeholder="dev" />
+              <Field
+                label={t('filebeat-k8s-app.fields.id', 'ID')}
+                value={policy.id}
+                onChange={(value) => update('id', value)}
+                placeholder="payment-app"
+                disabled={isEdit}
+                hint={t('filebeat-k8s-app.policyForm.hints.id', 'Stable policy ID. Use lowercase letters, numbers, and dashes; it cannot be changed after creation.')}
+              />
+              <Field
+                label={t('filebeat-k8s-app.fields.name', 'Name')}
+                value={policy.name}
+                onChange={(value) => update('name', value)}
+                placeholder="payment app"
+                hint={t('filebeat-k8s-app.policyForm.hints.name', 'Human-readable name shown in policy lists.')}
+              />
+              <Field
+                label={t('filebeat-k8s-app.fields.clusterId', 'Cluster ID')}
+                value={policy.cluster_id}
+                onChange={(value) => update('cluster_id', value)}
+                placeholder="dev"
+                hint={t('filebeat-k8s-app.policyForm.hints.clusterId', 'Must match the cluster_id reported by sidecar Agents, for example dev or prod-hk.')}
+              />
               <SelectField
-                label="namespace"
+                label={t('filebeat-k8s-app.fields.namespace', 'Namespace')}
                 value={policy.namespace || ''}
                 options={namespaceOptions}
                 onChange={(value) => updateScope({ namespace: value, controller_type: '', controller_name: '', container_name: '' })}
                 disabled={isHostFile}
+                hint={t('filebeat-k8s-app.policyForm.hints.namespace', 'Kubernetes namespace that contains the workload. Select it first to unlock controller choices.')}
                 placeholder={
                   isHostFile
                     ? t('filebeat-k8s-app.policyForm.hostFileNoNamespace', 'host_file does not need namespace')
@@ -220,11 +261,12 @@ function PolicyFormPage() {
                 }
               />
               <SelectField
-                label="controller_type"
+                label={t('filebeat-k8s-app.fields.controllerType', 'Controller type')}
                 value={policy.controller_type || ''}
                 options={availableControllerTypes}
                 onChange={(value) => updateScope({ controller_type: value, controller_name: '', container_name: '' })}
                 disabled={isHostFile || !selectedNamespace}
+                hint={t('filebeat-k8s-app.policyForm.hints.controllerType', 'Workload type. Use pod for a single Pod, or deployment/statefulset/daemonset/job/cronjob for controllers.')}
                 placeholder={
                   !selectedNamespace
                     ? t('filebeat-k8s-app.policyForm.chooseNamespaceFirst', 'Choose namespace first')
@@ -232,11 +274,12 @@ function PolicyFormPage() {
                 }
               />
               <SelectField
-                label="controller_name"
+                label={t('filebeat-k8s-app.fields.controllerName', 'Controller name')}
                 value={policy.controller_name || ''}
                 options={controllerNameOptions}
                 onChange={(value) => updateScope({ controller_name: value, container_name: '' })}
                 disabled={isHostFile || !selectedNamespace || !selectedControllerType}
+                hint={t('filebeat-k8s-app.policyForm.hints.controllerName', 'Workload or Pod name under the selected namespace and controller type.')}
                 placeholder={
                   !selectedNamespace
                     ? t('filebeat-k8s-app.policyForm.chooseNamespaceFirst', 'Choose namespace first')
@@ -246,11 +289,12 @@ function PolicyFormPage() {
                 }
               />
               <SelectField
-                label="container_name"
+                label={t('filebeat-k8s-app.fields.containerName', 'Container name')}
                 value={policy.container_name || ''}
                 options={containerNameOptions}
                 onChange={(value) => update('container_name', value)}
                 disabled={isHostFile || !selectedControllerName}
+                hint={t('filebeat-k8s-app.policyForm.hints.containerName', 'Container whose logs should be collected.')}
                 placeholder={
                   !selectedControllerName
                     ? t('filebeat-k8s-app.policyForm.chooseControllerNameFirst', 'Choose controller_name first')
@@ -258,33 +302,54 @@ function PolicyFormPage() {
                 }
               />
               <SelectField
-                label="log_type"
+                label={t('filebeat-k8s-app.fields.logType', 'Log type')}
                 value={policy.log_type}
                 options={logTypeOptions}
                 onChange={updateLogType}
+                hint={t('filebeat-k8s-app.policyForm.hints.logType', 'container_stdio collects stdout/stderr; container_file collects files inside the container; host_file collects node files.')}
                 placeholder={t('filebeat-k8s-app.policyForm.selectLogType', 'Select log_type')}
               />
-              <Field label="priority" value={String(policy.priority)} onChange={(value) => update('priority', Number(value) || 0)} />
+              <Field
+                label={t('filebeat-k8s-app.fields.priority', 'Priority')}
+                value={String(policy.priority)}
+                onChange={(value) => update('priority', Number(value) || 0)}
+                hint={t('filebeat-k8s-app.policyForm.hints.priority', 'Higher priority wins when multiple enabled policies match the same target.')}
+              />
               <div className={s.field}>
-                <label>enabled</label>
+                <FieldLabel
+                  label={t('filebeat-k8s-app.fields.enabled', 'Enabled')}
+                  hint={t('filebeat-k8s-app.policyForm.hints.enabled', 'Disabled policies are saved but not rendered to Agents.')}
+                />
                 <div className={s.checkboxLine}>
                   <input type="checkbox" checked={policy.enabled} onChange={(event) => update('enabled', event.currentTarget.checked)} />
-                  <span>{policy.enabled ? 'enabled' : 'disabled'}</span>
+                  <span>{policy.enabled ? t('filebeat-k8s-app.status.enabled', 'enabled') : t('filebeat-k8s-app.status.disabled', 'disabled')}</span>
                 </div>
               </div>
             </div>
 
             <h2>{t('filebeat-k8s-app.policyForm.advancedMatch', 'Advanced matching')}</h2>
             <div className={s.formGrid}>
-              <Field label="node_selector" value={policy.node_selector || ''} onChange={(value) => update('node_selector', value)} placeholder="nodepool=online,zone=hk" />
               <Field
-                label="log_path"
-                value={policy.log_path || ''}
-                onChange={(value) => update('log_path', value)}
-                placeholder={t('filebeat-k8s-app.policyForm.logPathPlaceholder', '/app/logs/*.log or /var/log/messages')}
+                label={t('filebeat-k8s-app.fields.nodeSelector', 'Node selector')}
+                value={policy.node_selector || ''}
+                onChange={(value) => update('node_selector', value)}
+                placeholder="nodepool=online,zone=hk"
+                hint={t('filebeat-k8s-app.policyForm.hints.nodeSelector', 'Optional comma-separated key=value pairs. Leave empty to match all nodes.')}
               />
+              {isFileLogType && (
+                <Field
+                  label={t('filebeat-k8s-app.fields.logPath', 'Log path')}
+                  value={policy.log_path || ''}
+                  onChange={(value) => update('log_path', value)}
+                  placeholder={t('filebeat-k8s-app.policyForm.logPathPlaceholder', '/app/logs/*.log or /var/log/messages')}
+                  hint={logPathHint}
+                />
+              )}
               <div className={`${s.field} ${s.fullSpan}`}>
-                <label>custom_fields</label>
+                <FieldLabel
+                  label={t('filebeat-k8s-app.fields.customFields', 'Custom fields')}
+                  hint={t('filebeat-k8s-app.policyForm.hints.customFields', 'One key=value pair per line. These fields are added to each event by Filebeat add_fields.')}
+                />
                 <textarea
                   className={s.input}
                   rows={5}
@@ -294,7 +359,14 @@ function PolicyFormPage() {
                 />
               </div>
               <div className={`${s.field} ${s.fullSpan}`}>
-                <label>input_config</label>
+                <FieldLabel
+                  label={t('filebeat-k8s-app.fields.inputConfig', 'Input config')}
+                  hint={t(
+                    'filebeat-k8s-app.policyForm.hints.inputConfig',
+                    'YAML object merged into the Filebeat filestream input. Reserved fields such as paths, parsers, and processors cannot be overridden.'
+                  )}
+                  hintMode="popover"
+                />
                 <textarea
                   className={s.input}
                   rows={7}
@@ -328,19 +400,96 @@ function PolicyFormPage() {
   );
 }
 
+function normalizePolicyForLogType(policy: Policy): Policy {
+  if (policy.log_type === 'container_stdio') {
+    return { ...policy, log_path: '' };
+  }
+  return policy;
+}
+
+interface FieldLabelProps {
+  label: string;
+  hint?: string;
+  hintMode?: 'tooltip' | 'popover';
+}
+
+function FieldLabel({ label, hint, hintMode = 'tooltip' }: FieldLabelProps) {
+  const s = useStyles2(getPageStyles);
+
+  return (
+    <div className={s.fieldLabel}>
+      <span>{label}</span>
+      {hint && hintMode === 'tooltip' && (
+        <IconButton
+          className={s.helpIcon}
+          name="info-circle"
+          size="sm"
+          tooltip={hint}
+          tooltipPlacement="top"
+          type="button"
+          variant="secondary"
+        />
+      )}
+      {hint && hintMode === 'popover' && <FieldHelpPopover content={hint} />}
+    </div>
+  );
+}
+
+interface FieldHelpPopoverProps {
+  content: string;
+}
+
+function FieldHelpPopover({ content }: FieldHelpPopoverProps) {
+  const s = useStyles2(getPageStyles);
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  const [show, setShow] = useState(false);
+
+  return (
+    <>
+      <IconButton
+        ref={setAnchor}
+        className={s.helpIcon}
+        name="info-circle"
+        size="sm"
+        aria-label={content}
+        onBlur={() => setShow(false)}
+        onClick={() => setShow((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setShow(false);
+          }
+        }}
+        type="button"
+        variant="secondary"
+      />
+      {anchor && (
+        <Popover
+          content={<div className={s.helpPopover}>{content}</div>}
+          hidePopper={() => setShow(false)}
+          placement="top"
+          referenceElement={anchor}
+          renderArrow
+          show={show}
+        />
+      )}
+    </>
+  );
+}
+
 interface FieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  hint?: string;
 }
 
-function Field({ label, value, onChange, placeholder, disabled }: FieldProps) {
+function Field({ label, value, onChange, placeholder, disabled, hint }: FieldProps) {
   const s = useStyles2(getPageStyles);
   return (
     <div className={s.field}>
-      <label>{label}</label>
+      <FieldLabel label={label} hint={hint} />
       <input
         className={s.input}
         value={value}
@@ -359,15 +508,16 @@ interface SelectFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  hint?: string;
 }
 
-function SelectField({ label, value, options, onChange, placeholder, disabled }: SelectFieldProps) {
+function SelectField({ label, value, options, onChange, placeholder, disabled, hint }: SelectFieldProps) {
   const s = useStyles2(getPageStyles);
   const uniqueOptions = Array.from(new Set([...options, value].filter(Boolean))).sort();
   const selectOptions: Array<ComboboxOption<string>> = uniqueOptions.map((option) => ({ label: option, value: option }));
   return (
     <div className={s.field}>
-      <label>{label}</label>
+      <FieldLabel label={label} hint={hint} />
       <Combobox
         value={value || null}
         options={selectOptions}

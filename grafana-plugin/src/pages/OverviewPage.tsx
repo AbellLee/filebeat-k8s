@@ -89,11 +89,11 @@ function OverviewPage() {
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th>name</th>
-                  <th>scope</th>
-                  <th>log_type</th>
-                  <th>revision</th>
-                  <th>checksum</th>
+                  <th>{t('filebeat-k8s-app.fields.name', 'Name')}</th>
+                  <th>{t('filebeat-k8s-app.fields.scope', 'Scope')}</th>
+                  <th>{t('filebeat-k8s-app.fields.logType', 'Log type')}</th>
+                  <th>{t('filebeat-k8s-app.fields.revision', 'Revision')}</th>
+                  <th>{t('filebeat-k8s-app.fields.checksum', 'Checksum')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,10 +120,10 @@ function OverviewPage() {
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th>agent_id</th>
-                  <th>checksum</th>
-                  <th>status</th>
-                  <th>message</th>
+                  <th>{t('filebeat-k8s-app.fields.agentId', 'Agent ID')}</th>
+                  <th>{t('filebeat-k8s-app.fields.checksum', 'Checksum')}</th>
+                  <th>{t('filebeat-k8s-app.fields.status', 'Status')}</th>
+                  <th>{t('filebeat-k8s-app.fields.message', 'Message')}</th>
                 </tr>
               </thead>
               <tbody>

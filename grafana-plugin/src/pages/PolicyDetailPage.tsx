@@ -114,15 +114,15 @@ function PolicyDetailPage() {
         )}
 
         <div className={s.grid4}>
-          <Summary label="policy_id" value={policy.id} />
-          <Summary label="scope" value={policyScope(policy)} />
-          <Summary label="current_revision" value={String(policy.current_revision)} />
-          <Summary label="rendered_checksum" value={shortChecksum(policy.rendered_checksum)} />
+          <Summary label={t('filebeat-k8s-app.fields.policyId', 'Policy ID')} value={policy.id} />
+          <Summary label={t('filebeat-k8s-app.fields.scope', 'Scope')} value={policyScope(policy)} />
+          <Summary label={t('filebeat-k8s-app.fields.currentRevision', 'Current revision')} value={String(policy.current_revision)} />
+          <Summary label={t('filebeat-k8s-app.fields.renderedChecksum', 'Rendered checksum')} value={shortChecksum(policy.rendered_checksum)} />
         </div>
 
         <div className={s.grid2}>
           <section className={s.card}>
-            <h2>rendered_config</h2>
+            <h2>{t('filebeat-k8s-app.fields.renderedConfig', 'Rendered config')}</h2>
             <pre className={s.code}>{policy.rendered_config || t('filebeat-k8s-app.policyDetail.noRenderedConfig', 'This policy has no rendered_config yet.')}</pre>
           </section>
 
@@ -131,11 +131,11 @@ function PolicyDetailPage() {
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th>revision</th>
-                  <th>checksum</th>
-                  <th>created_by</th>
-                  <th>created_at</th>
-                  <th>action</th>
+                  <th>{t('filebeat-k8s-app.fields.revision', 'Revision')}</th>
+                  <th>{t('filebeat-k8s-app.fields.checksum', 'Checksum')}</th>
+                  <th>{t('filebeat-k8s-app.fields.createdBy', 'Created by')}</th>
+                  <th>{t('filebeat-k8s-app.fields.createdAt', 'Created at')}</th>
+                  <th>{t('filebeat-k8s-app.fields.action', 'Action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,7 +183,7 @@ function PolicyDetailPage() {
             )}
           </p>
           <div className={s.card}>
-            <div className={s.muted}>target checksum</div>
+            <div className={s.muted}>{t('filebeat-k8s-app.fields.targetChecksum', 'Target checksum')}</div>
             <strong className={s.mono}>{rollbackTarget.checksum}</strong>
           </div>
           <div className={s.toolbar} style={{ justifyContent: 'flex-end', marginTop: 16 }}>

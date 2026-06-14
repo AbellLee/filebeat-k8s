@@ -148,8 +148,8 @@ function PoliciesPage() {
               onChange={(event) => setFilters({ ...filters, enabled: event.target.value })}
             >
               <option value="">{t('filebeat-k8s-app.policies.enabledAll', 'enabled: all')}</option>
-              <option value="true">enabled</option>
-              <option value="false">disabled</option>
+              <option value="true">{t('filebeat-k8s-app.status.enabled', 'enabled')}</option>
+              <option value="false">{t('filebeat-k8s-app.status.disabled', 'disabled')}</option>
             </select>
             <input
               className={s.input}
@@ -167,14 +167,14 @@ function PoliciesPage() {
           <table className={s.table}>
             <thead>
               <tr>
-                <th>name</th>
-                <th>scope</th>
-                <th>log_type</th>
-                <th>enabled</th>
-                <th>revision</th>
-                <th>checksum</th>
-                <th>updated_at</th>
-                <th>{t('filebeat-k8s-app.policies.actions', 'actions')}</th>
+                <th>{t('filebeat-k8s-app.fields.name', 'Name')}</th>
+                <th>{t('filebeat-k8s-app.fields.scope', 'Scope')}</th>
+                <th>{t('filebeat-k8s-app.fields.logType', 'Log type')}</th>
+                <th>{t('filebeat-k8s-app.fields.enabled', 'Enabled')}</th>
+                <th>{t('filebeat-k8s-app.fields.revision', 'Revision')}</th>
+                <th>{t('filebeat-k8s-app.fields.checksum', 'Checksum')}</th>
+                <th>{t('filebeat-k8s-app.fields.updatedAt', 'Updated at')}</th>
+                <th>{t('filebeat-k8s-app.fields.actions', 'Actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -192,7 +192,7 @@ function PoliciesPage() {
                   </td>
                   <td>
                     <span className={`${s.chip} ${policy.enabled ? s.chipGreen : ''}`}>
-                      {policy.enabled ? 'enabled' : 'disabled'}
+                      {policy.enabled ? t('filebeat-k8s-app.status.enabled', 'enabled') : t('filebeat-k8s-app.status.disabled', 'disabled')}
                     </span>
                   </td>
                   <td>{policy.current_revision}</td>
