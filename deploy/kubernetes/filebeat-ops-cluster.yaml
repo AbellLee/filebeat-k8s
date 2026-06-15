@@ -1,0 +1,288 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: filebeat-ops
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: filebeat-ops
+  namespace: filebeat-ops
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filebeat-ops
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  - daemonsets
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  - cronjobs
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: filebeat-ops
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: filebeat-ops
+subjects:
+- kind: ServiceAccount
+  name: filebeat-ops
+  namespace: filebeat-ops
+---
+apiVersion: v1
+data:
+  cluster-id: change-me-cluster-id
+  filebeat.yml: |
+    filebeat.config.inputs:
+      enabled: true
+      path: inputs.d/*.yml
+      reload.enabled: true
+      reload.period: 10s
+    output.console:
+      pretty: true
+kind: ConfigMap
+metadata:
+  name: filebeat-ops-config
+  namespace: filebeat-ops
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: filebeat-ops-secret
+  namespace: filebeat-ops
+stringData:
+  agent-token: change-me-agent-token
+  database-url: mysql://filebeat:change-me-password@mysql:3306/filebeat_ops?parseTime=true
+  kafka-hosts: change-me-kafka-bootstrap:9092
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebeat-control-server
+  namespace: filebeat-ops
+spec:
+  ports:
+  - name: http
+    nodePort: 32733
+    port: 8080
+    targetPort: http
+  selector:
+    app: filebeat-control-server
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filebeat-control-server
+  namespace: filebeat-ops
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: filebeat-control-server
+  template:
+    metadata:
+      labels:
+        app: filebeat-control-server
+    spec:
+      containers:
+      - env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: database-url
+              name: filebeat-ops-secret
+        - name: AGENT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: agent-token
+              name: filebeat-ops-secret
+        - name: PORT
+          value: "8080"
+        - name: OPERATOR_ENABLED
+          value: "false"
+        - name: OPERATOR_CLUSTER_ID
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-id
+              name: filebeat-ops-config
+        image: hub.kce.ksyun.com/ked-monitoring/filebeat-ops-server:8d2dae9
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 20
+        name: control-server
+        ports:
+        - containerPort: 8080
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: http
+          periodSeconds: 10
+      serviceAccountName: filebeat-ops
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat-agent
+  namespace: filebeat-ops
+spec:
+  selector:
+    matchLabels:
+      app: filebeat-agent
+  template:
+    metadata:
+      labels:
+        app: filebeat-agent
+    spec:
+      containers:
+      - args:
+        - -e
+        - -c
+        - /usr/share/filebeat/filebeat.yml
+        image: docker.elastic.co/beats/filebeat:9.4.1
+        name: filebeat
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+        volumeMounts:
+        - mountPath: /usr/share/filebeat/filebeat.yml
+          name: filebeat-config
+          readOnly: true
+          subPath: filebeat.yml
+        - mountPath: /usr/share/filebeat/inputs.d
+          name: dynamic-inputs
+        - mountPath: /usr/share/filebeat/data
+          name: filebeat-data
+        - mountPath: /var/log
+          name: varlog
+          readOnly: true
+        - mountPath: /hostfs
+          name: hostfs
+          readOnly: true
+        - mountPath: /hostproc
+          name: hostproc
+          readOnly: true
+      - env:
+        - name: CONTROL_SERVER_URL
+          value: http://filebeat-control-server:8080
+        - name: AGENT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: agent-token
+              name: filebeat-ops-secret
+        - name: CLUSTER_ID
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-id
+              name: filebeat-ops-config
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: INPUTS_DIR
+          value: /usr/share/filebeat/inputs.d
+        - name: CONFIG_MODE
+          value: watch
+        - name: WATCH_TIMEOUT
+          value: 25s
+        - name: POLL_INTERVAL
+          value: 30s
+        - name: K8S_PROFILE
+          value: auto
+        - name: CONTAINER_FILE_MODE
+          value: auto
+        - name: KLOG_DIR
+          value: /var/log/klog
+        - name: KLOG_STDIO_DIR
+          value: /var/log/klog-stdio
+        - name: STDIO_LOG_DIR_CANDIDATES
+          value: /var/log/containers,/hostfs/var/log/containers
+        - name: CONTAINERD_STATE_DIR_CANDIDATES
+          value: /run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io,/run/containerd/io.containerd.runtime.v2.task/k8s.io,/var/run/containerd/io.containerd.runtime.v2.task/k8s.io,/data/container/state/io.containerd.runtime.v2.task/k8s.io
+        - name: HOSTFS_DIR
+          value: /hostfs
+        - name: HOSTPROC_DIR
+          value: /hostproc
+        image: hub.kce.ksyun.com/ked-monitoring/filebeat-ops-sidecar:8d2dae9
+        imagePullPolicy: IfNotPresent
+        name: control-sidecar
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+        volumeMounts:
+        - mountPath: /usr/share/filebeat/inputs.d
+          name: dynamic-inputs
+        - mountPath: /var/log
+          name: varlog
+        - mountPath: /hostfs
+          name: hostfs
+          readOnly: true
+        - mountPath: /hostproc
+          name: hostproc
+          readOnly: true
+      serviceAccountName: filebeat-ops
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          name: filebeat-ops-config
+        name: filebeat-config
+      - emptyDir: {}
+        name: dynamic-inputs
+      - hostPath:
+          path: /var/lib/filebeat-ops/data
+          type: DirectoryOrCreate
+        name: filebeat-data
+      - hostPath:
+          path: /var/log
+          type: Directory
+        name: varlog
+      - hostPath:
+          path: /
+          type: Directory
+        name: hostfs
+      - hostPath:
+          path: /proc
+          type: Directory
+        name: hostproc

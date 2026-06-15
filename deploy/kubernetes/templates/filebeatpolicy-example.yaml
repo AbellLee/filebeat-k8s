@@ -1,0 +1,18 @@
+apiVersion: filebeat.ops.io/v1alpha1
+kind: FilebeatPolicy
+metadata:
+  name: example-stdout-policy
+  namespace: default
+spec:
+  id: example-stdout-policy
+  name: Example Stdout Policy
+  clusterID: change-me-cluster-id
+  namespace: default
+  controllerType: deployment
+  controllerName: change-me-workload
+  containerName: change-me-container
+  logType: container_stdio
+  enabled: true
+  priority: 100
+  customFields:
+    app: change-me

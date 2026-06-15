@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: filebeat-ops-config
 data:
-  cluster-id: dev
+  cluster-id: change-me-cluster-id
   filebeat.yml: |
     filebeat.config.inputs:
       enabled: true

@@ -6,6 +6,5 @@ resources:
   - secret.yaml
   - configmap.yaml
   - rbac.yaml
-  - crd-filebeatpolicy.yaml
   - control-server.yaml
   - filebeat-agent.yaml

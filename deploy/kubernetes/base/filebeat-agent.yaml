@@ -27,6 +27,8 @@ spec:
               readOnly: true
             - name: dynamic-inputs
               mountPath: /usr/share/filebeat/inputs.d
+            - name: filebeat-data
+              mountPath: /usr/share/filebeat/data
             - name: varlog
               mountPath: /var/log
               readOnly: true
@@ -108,6 +110,10 @@ spec:
             name: filebeat-ops-config
         - name: dynamic-inputs
           emptyDir: {}
+        - name: filebeat-data
+          hostPath:
+            path: /var/lib/filebeat-ops/data
+            type: DirectoryOrCreate
         - name: varlog
           hostPath:
             path: /var/log
