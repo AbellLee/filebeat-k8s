@@ -66,6 +66,37 @@ export function policyScope(policy: Policy): string {
     .join(' / ');
 }
 
+export function derivePolicyName(policy: Policy): string {
+  const clusterID = policy.cluster_id.trim();
+  const namespace = (policy.namespace || '').trim();
+  const controllerType = (policy.controller_type || '').trim();
+  const controllerName = (policy.controller_name || '').trim();
+  const containerName = (policy.container_name || '').trim();
+  const logType = policy.log_type.trim();
+  const logPath = (policy.log_path || '').trim();
+
+  if (logType === 'host_file') {
+    return clusterID && logPath ? [clusterID, 'host_file', logPath].join(' / ') : '';
+  }
+
+  if (!namespace || !controllerType || !controllerName || !containerName) {
+    return '';
+  }
+  if (logType === 'container_file' && !logPath) {
+    return '';
+  }
+
+  const parts = [namespace, `${controllerType}/${controllerName}`, containerName, logType];
+  if (logType === 'container_file') {
+    parts.push(logPath);
+  }
+  return parts.join(' / ');
+}
+
+export function uniqueClusterIds(agents: Agent[]): string[] {
+  return Array.from(new Set(agents.map((agent) => agent.cluster_id.trim()).filter(Boolean))).sort();
+}
+
 export function shortChecksum(value?: string): string {
   if (!value) {
     return '-';

@@ -7,7 +7,15 @@ import { api } from '../api/client';
 import { ClusterOptions, LogType, Policy } from '../types';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
-import { customFieldsFromText, customFieldsToText, emptyPolicy, inputConfigFromYaml, inputConfigToYaml } from './utils';
+import {
+  customFieldsFromText,
+  customFieldsToText,
+  derivePolicyName,
+  emptyPolicy,
+  inputConfigFromYaml,
+  inputConfigToYaml,
+  uniqueClusterIds,
+} from './utils';
 import { getPageStyles } from './styles';
 
 const controllerTypeOptions = ['deployment', 'statefulset', 'daemonset', 'job', 'cronjob', 'pod', 'replicaset'];
@@ -22,6 +30,8 @@ function PolicyFormPage() {
   const [customFields, setCustomFields] = useState('');
   const [inputConfig, setInputConfig] = useState('');
   const [options, setOptions] = useState<ClusterOptions | undefined>();
+  const [clusterOptions, setClusterOptions] = useState<string[]>([]);
+  const [autoName, setAutoName] = useState(!isEdit);
   const [renderedConfig, setRenderedConfig] = useState('');
   const [renderedChecksum, setRenderedChecksum] = useState('');
   const [previewError, setPreviewError] = useState('');
@@ -95,11 +105,16 @@ function PolicyFormPage() {
 
   useEffect(() => {
     api.clusterOptions().then(setOptions).catch(() => undefined);
+    api
+      .listAgents()
+      .then((agents) => setClusterOptions(uniqueClusterIds(agents)))
+      .catch(() => undefined);
     if (id) {
       api
         .getPolicy(id)
         .then((data) => {
           setPolicy(data);
+          setAutoName(false);
           setCustomFields(customFieldsToText(data.custom_fields));
           setInputConfig(inputConfigToYaml(data.input_config));
           setRenderedConfig(data.rendered_config || '');
@@ -110,14 +125,30 @@ function PolicyFormPage() {
   }, [id]);
 
   useEffect(() => {
+    if (!autoName) {
+      return;
+    }
+    setPolicy((current) => {
+      const name = derivePolicyName(current);
+      return current.name === name ? current : { ...current, name };
+    });
+  }, [
+    autoName,
+    policy.cluster_id,
+    policy.namespace,
+    policy.controller_type,
+    policy.controller_name,
+    policy.container_name,
+    policy.log_type,
+    policy.log_path,
+    policy.name,
+  ]);
+
+  useEffect(() => {
     if (parsedInputConfig.error) {
       return;
     }
-    const next = {
-      ...normalizePolicyForLogType(policy),
-      custom_fields: customFieldsFromText(customFields),
-      input_config: parsedInputConfig.config,
-    };
+    const next = policyPayload(policy, customFields, parsedInputConfig.config);
     const timer = window.setTimeout(() => {
       if (!next.name || !next.cluster_id) {
         return;
@@ -136,6 +167,11 @@ function PolicyFormPage() {
 
   const update = (key: keyof Policy, value: string | number | boolean) => {
     setPolicy((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateName = (value: string) => {
+    setAutoName(value.trim() === '');
+    setPolicy((current) => ({ ...current, name: value }));
   };
 
   const updateScope = (patch: Partial<Policy>) => {
@@ -171,11 +207,7 @@ function PolicyFormPage() {
     if (parsedInputConfig.error) {
       return;
     }
-    const payload = {
-      ...normalizePolicyForLogType(policy),
-      custom_fields: customFieldsFromText(customFields),
-      input_config: parsedInputConfig.config,
-    };
+    const payload = policyPayload(policy, customFields, parsedInputConfig.config);
     try {
       const saved = isEdit && id ? await api.updatePolicy(id, payload) : await api.createPolicy(payload);
       navigate(prefixRoute(`policies/${encodeURIComponent(saved.id)}`));
@@ -236,16 +268,18 @@ function PolicyFormPage() {
               <Field
                 label={t('filebeat-k8s-app.fields.name', 'Name')}
                 value={policy.name}
-                onChange={(value) => update('name', value)}
+                onChange={updateName}
                 placeholder="payment app"
                 hint={t('filebeat-k8s-app.policyForm.hints.name', 'Human-readable name shown in policy lists.')}
               />
-              <Field
+              <SelectField
                 label={t('filebeat-k8s-app.fields.clusterId', 'Cluster ID')}
                 value={policy.cluster_id}
+                options={clusterOptions}
                 onChange={(value) => update('cluster_id', value)}
                 placeholder="dev"
                 hint={t('filebeat-k8s-app.policyForm.hints.clusterId', 'Must match the cluster_id reported by sidecar Agents, for example dev or prod-hk.')}
+                createCustomValue
               />
               <SelectField
                 label={t('filebeat-k8s-app.fields.namespace', 'Namespace')}
@@ -407,6 +441,16 @@ function normalizePolicyForLogType(policy: Policy): Policy {
   return policy;
 }
 
+function policyPayload(policy: Policy, customFields: string, inputConfig: Record<string, unknown>): Policy {
+  const normalized = normalizePolicyForLogType(policy);
+  return {
+    ...normalized,
+    name: normalized.name.trim() || derivePolicyName(normalized),
+    custom_fields: customFieldsFromText(customFields),
+    input_config: inputConfig,
+  };
+}
+
 interface FieldLabelProps {
   label: string;
   hint?: string;
@@ -509,9 +553,10 @@ interface SelectFieldProps {
   placeholder?: string;
   disabled?: boolean;
   hint?: string;
+  createCustomValue?: boolean;
 }
 
-function SelectField({ label, value, options, onChange, placeholder, disabled, hint }: SelectFieldProps) {
+function SelectField({ label, value, options, onChange, placeholder, disabled, hint, createCustomValue }: SelectFieldProps) {
   const s = useStyles2(getPageStyles);
   const uniqueOptions = Array.from(new Set([...options, value].filter(Boolean))).sort();
   const selectOptions: Array<ComboboxOption<string>> = uniqueOptions.map((option) => ({ label: option, value: option }));
@@ -524,6 +569,7 @@ function SelectField({ label, value, options, onChange, placeholder, disabled, h
         placeholder={placeholder}
         disabled={disabled}
         isClearable={!disabled}
+        createCustomValue={createCustomValue}
         onChange={(selected: ComboboxOption<string> | null) => onChange(selected?.value ?? '')}
         width="auto"
         minWidth={20}

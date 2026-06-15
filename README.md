@@ -88,6 +88,6 @@ Before applying, update these release placeholders:
 
 - `deploy/kubernetes/kustomization.yaml`: image registry and tag
 - `deploy/kubernetes/base/configmap.yaml`: `cluster-id`
-- `deploy/kubernetes/base/secret.yaml`: `database-url`, `agent-token`, and any bootstrap endpoints
+- `deploy/kubernetes/base/secret.yaml`: `database-url` and `agent-token`
 
 The default release manifests do not install the `FilebeatPolicy` CRD and keep `OPERATOR_ENABLED=false`. If you later want CRD-driven policy management, use `deploy/kubernetes/base/crd-filebeatpolicy.yaml` and the example custom resource in `deploy/kubernetes/templates/filebeatpolicy-example.yaml`.
