@@ -2,6 +2,9 @@ import { parse, stringify } from 'yaml';
 import { t } from '@grafana/i18n';
 import { Agent, Policy } from '../types';
 
+const healthyHeartbeatMs = 5 * 60 * 1000;
+const clockSkewGraceMs = 30 * 1000;
+
 export const emptyPolicy = (): Policy => ({
   id: '',
   name: '',
@@ -39,7 +42,11 @@ export function timeAgo(value?: string): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  const seconds = Math.max(1, Math.round((Date.now() - date.getTime()) / 1000));
+  const ageMs = Date.now() - date.getTime();
+  if (ageMs < -clockSkewGraceMs) {
+    return t('filebeat-k8s-app.common.clockSkew', 'clock skew');
+  }
+  const seconds = Math.max(1, Math.round(Math.max(0, ageMs) / 1000));
   if (seconds < 60) {
     return t('filebeat-k8s-app.common.secondsAgo', '{{count}}s ago', { count: seconds });
   }
@@ -139,5 +146,9 @@ export function agentHealthy(agent: Agent): boolean {
     return false;
   }
   const lastHeartbeat = new Date(agent.last_heartbeat_at).getTime();
-  return !Number.isNaN(lastHeartbeat) && Date.now() - lastHeartbeat < 5 * 60 * 1000;
+  if (Number.isNaN(lastHeartbeat)) {
+    return false;
+  }
+  const ageMs = Date.now() - lastHeartbeat;
+  return ageMs >= -clockSkewGraceMs && ageMs < healthyHeartbeatMs;
 }

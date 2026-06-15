@@ -27,6 +27,7 @@ export const zhHansResources: Resources = {
       secondsAgo: '{{count}} 秒前',
       minutesAgo: '{{count}} 分钟前',
       hoursAgo: '{{count}} 小时前',
+      clockSkew: '时间偏移',
     },
     status: {
       enabled: '已启用',

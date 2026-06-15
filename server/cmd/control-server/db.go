@@ -55,6 +55,12 @@ func mysqlDSN(raw string) (string, error) {
 	if query.Get("parseTime") == "" {
 		query.Set("parseTime", "true")
 	}
+	if query.Get("loc") == "" {
+		query.Set("loc", "UTC")
+	}
+	if query.Get("time_zone") == "" {
+		query.Set("time_zone", "'+00:00'")
+	}
 	auth := user
 	if pass != "" {
 		auth += ":" + pass

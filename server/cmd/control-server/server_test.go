@@ -17,7 +17,18 @@ func TestMySQLDSNFromURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "filebeat:secret@tcp(localhost:53306)/filebeat_ops?parseTime=true"
+	want := "filebeat:secret@tcp(localhost:53306)/filebeat_ops?loc=UTC&parseTime=true&time_zone=%27%2B00%3A00%27"
+	if dsn != want {
+		t.Fatalf("dsn mismatch\nwant: %s\n got: %s", want, dsn)
+	}
+}
+
+func TestMySQLDSNPreservesExplicitTimeParameters(t *testing.T) {
+	dsn, err := mysqlDSN("mysql://filebeat:secret@localhost:53306/filebeat_ops?loc=Asia%2FHong_Kong&parseTime=true&time_zone=%27%2B08%3A00%27")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "filebeat:secret@tcp(localhost:53306)/filebeat_ops?loc=Asia%2FHong_Kong&parseTime=true&time_zone=%27%2B08%3A00%27"
 	if dsn != want {
 		t.Fatalf("dsn mismatch\nwant: %s\n got: %s", want, dsn)
 	}
